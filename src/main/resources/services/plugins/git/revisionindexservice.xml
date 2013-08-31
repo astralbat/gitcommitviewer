@@ -1,0 +1,5 @@
+<changesservice id="git-revisionindexservice">
+    <description>System service to retrieve latest Git commits</description>
+    <properties>
+    </properties>
+</changesservice>

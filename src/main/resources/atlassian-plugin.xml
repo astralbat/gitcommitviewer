@@ -1,0 +1,73 @@
+<atlassian-plugin key="${project.groupId}.${project.artifactId}" name="${project.name}" plugins-version="2">
+    <plugin-info>
+        <description>${project.description}</description>
+        <version>${project.version}</version>
+        <vendor name="${project.organization.name}" url="${project.organization.url}" />
+        <param name="plugin-icon">images/pluginIcon.png</param>
+        <param name="plugin-logo">images/pluginLogo.png</param>
+    </plugin-info>
+
+    <!-- add our i18n resource -->
+    <resource type="i18n" name="i18n" location="gitcommitplugin"/>
+    
+    <!-- add our web resources -->
+    <web-resource key="gitcommitplugin-resources" name="gitcommitplugin Web Resources">
+        <dependency>com.atlassian.auiplugin:ajs</dependency>
+        
+        <resource type="download" name="gitcommitplugin.css" location="/css/gitcommitplugin.css"/>
+        <resource type="download" name="gitcommitplugin.js" location="/js/gitcommitplugin.js"/>
+        <resource type="download" name="images/" location="/images"/>
+
+        <context>gitcommitplugin</context>
+    </web-resource>
+    
+    <!-- import from the product container -->
+    <component-import key="applicationProperties" interface="com.atlassian.sal.api.ApplicationProperties" />
+    
+    <component-import key="pluginScheduler">
+    	<description>SAL Scheduler</description>
+    	<interface>com.atlassian.sal.api.scheduling.PluginScheduler</interface>
+	</component-import>
+    
+    <web-item key="git-repositories-link" name="Git repositories link on administrators page" section="admin_plugins_menu/source_control" weight="95">
+        <label key="git.repositories" />
+        <condition class="com.atlassian.jira.plugin.webfragment.conditions.JiraGlobalPermissionCondition">
+            <param name="permission">admin</param>
+        </condition>
+        <link linkId="git-repositories">/secure/ViewGitRepositories.jspa</link>
+    </web-item>
+
+    <webwork1 key="GitRepositoriesManagement" name="Git repositories management" class="java.lang.Object">
+        <actions>
+            <action name="jiracommitviewer.action.ViewGitRepositoriesAction" alias="ViewGitRepositories">
+                <view name="success">/templates/plugins/git/configuration/list.vm</view>
+            </action>
+            <action name="jiracommitviewer.action.AddGitRepositoryAction" alias="AddGitRepository">
+                <view name="input">/templates/plugins/git/configuration/add.vm</view>
+                <view name="error">/templates/plugins/git/configuration/add.vm</view>
+                <view name="permissionviolation">/templates/plugins/git/configuration/no-privilege.vm</view>
+            </action>
+            <action name="jiracommitviewer.action.UpdateGitRepositoryAction" alias="UpdateGitRepository">
+                <view name="input">/templates/plugins/git/configuration/edit.vm</view>
+                <view name="permissionviolation">/templates/plugins/git/configuration/no-privilege.vm</view>
+                <view name="error">/templates/plugins/git/configuration/edit.vm</view>
+            </action>
+            <action name="jiracommitviewer.action.DeleteGitRepositoryAction" alias="DeleteGitRepository">
+				<view name="input">/templates/plugins/git/configuration/delete.vm</view>
+                <view name="permissionviolation">/templates/plugins/git/configuration/no-privilege.vm</view>
+				<view name="error">/templates/plugins/git/configuration/delete.vm</view>
+            </action>
+            <action name="jiracommitviewer.action.ActivateGitRepositoryAction" alias="ActivateGitRepository">
+                <view name="permissionviolation">/templates/plugins/git/configuration/no-privilege.vm</view>
+                <view name="success">/templates/plugins/git/configuration/activate.vm</view>
+            </action>
+        </actions>
+    </webwork1>
+    
+    <web-resource key="git-resource-js" name="Git JavaScript">
+        <context>jira.view.issue</context>
+        <dependency>jira.webresources:jira-global</dependency>
+        <resource type="download" name="git.css" location="templates/plugins/git/css/git.css"/>
+        <resource type="download" name="git.js" location="templates/plugins/git/scripts/git.js"/>
+    </web-resource>
+</atlassian-plugin>
