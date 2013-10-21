@@ -6,7 +6,7 @@
     <artifactId>jiracommitviewer</artifactId>
     <version>1.0</version>
     <organization>
-        <name>n/a</name>
+        <name>Mark Barrett</name>
         <url>https://github.com/astralbat/gitcommitviewer</url>
     </organization>
     <name>Git Commit Viewer</name>
