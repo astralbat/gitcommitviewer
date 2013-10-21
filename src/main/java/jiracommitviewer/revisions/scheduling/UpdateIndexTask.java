@@ -1,39 +1,42 @@
 package jiracommitviewer.revisions.scheduling;
 
-import com.atlassian.sal.api.scheduling.PluginJob;
+import java.util.Map;
+
+import jiracommitviewer.RepositoryManager;
+import jiracommitviewer.domain.GitRepository;
+import jiracommitviewer.index.GitCommitIndexer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
+import com.atlassian.sal.api.scheduling.PluginJob;
 
-import jiracommitviewer.MultipleGitRepositoryManager;
-import jiracommitviewer.revisions.CommitIndexer;
-
+/**
+ * Task that updates the repository indexes. This should be scheduled to execute frequently.
+ * 
+ * @author mark
+ */
 public class UpdateIndexTask implements PluginJob {
 
     private final static Logger logger = LoggerFactory.getLogger(UpdateIndexTask.class);
 
     @Override
     public void execute(Map<String, Object> jobDataMap) {
-
-        final UpdateIndexMonitorImpl monitor = (UpdateIndexMonitorImpl) jobDataMap.get("UpdateIndexMonitorImpl:instance");
-        final MultipleGitRepositoryManager multipleGitRepositoryManager = (MultipleGitRepositoryManager) jobDataMap.get("MultipleSubversionRepositoryManager");
+        final UpdateIndexMonitorImpl monitor = (UpdateIndexMonitorImpl)jobDataMap.get("UpdateIndexMonitorImpl:instance");
+        final GitCommitIndexer gitCommitIndexer = (GitCommitIndexer)jobDataMap.get("GitCommitIndexer");
+        final RepositoryManager repositoryManager = (RepositoryManager)jobDataMap.get("RepositoryManager");
         assert monitor != null;
 
         try {
-            if (null == multipleGitRepositoryManager) {
+            if (gitCommitIndexer == null) {
                 return; // Just return --- the plugin is disabled. Don't log anything.
             }
 
-            CommitIndexer revisionIndexer = multipleGitRepositoryManager.getRevisionIndexer();
-            if (revisionIndexer != null) {
-                revisionIndexer.updateIndex();
-            } else {
-                logger.warn("Tried to index changes but SubversionManager has no revision indexer?");
+            for (final GitRepository repository : repositoryManager.getRepositoryList(GitRepository.class)) {
+            	gitCommitIndexer.index(repository);
             }
-        } catch (Exception e) {
-            logger.error("Error indexing changes: " + e);
+        } catch (final Exception e) {
+            logger.error("Error indexing changes", e);
         }
     }
 }

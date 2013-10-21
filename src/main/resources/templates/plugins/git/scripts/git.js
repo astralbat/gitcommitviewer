@@ -108,11 +108,13 @@ jQuery(function($) {
         }
     };
 
-    JIRA.ViewIssueTabs.onTabReady(function() {
-        $("input.plugin_git_showmore_issuetab_button").each(function() {
-            git.initShowMoreButtonInIssueTab($(this));
-        });
-    });
+    if (typeof(JIRA.ViewIssueTabs) != "undefined") {
+    	JIRA.ViewIssueTabs.onTabReady(function() {
+    		$("input.plugin_git_showmore_issuetab_button").each(function() {
+    			git.initShowMoreButtonInIssueTab($(this));
+    		});
+    	});
+    }
 
     $(".plugin_git_showmore_issuetab_button").click(function() {
         $(this).data('initialised', false);

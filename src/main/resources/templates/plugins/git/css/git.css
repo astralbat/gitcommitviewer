@@ -1,4 +1,8 @@
-div.plugin_subversion_showmore_projectab, div.plugin_subversion_showmore_issuetab {
+div.plugin_git_showmore_projectab, div.plugin_git_showmore_issuetab {
     text-align: center;
     padding: 5px;
+}
+
+td {
+	font-size: 13px;
 }

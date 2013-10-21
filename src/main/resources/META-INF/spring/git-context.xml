@@ -1,33 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <beans:beans xmlns:beans="http://www.springframework.org/schema/beans"
-	xmlns:osgi="http://www.springframework.org/schema/osgi" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.5.xsd
-http://www.springframework.org/schema/osgi http://www.springframework.org/schema/osgi/spring-osgi.xsd"
+	xmlns:osgi="http://www.springframework.org/schema/osgi" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+	http://www.springframework.org/schema/beans/spring-beans-2.5.xsd
+	http://www.springframework.org/schema/osgi 
+	http://www.springframework.org/schema/osgi/spring-osgi.xsd 
+	http://www.springframework.org/schema/context/spring-context-2.5.xsd"
 	default-autowire="autodetect">
 	
+	<context:annotation-config/>
 	
-	<beans:bean id="gitManager" class="jiracommitviewer.MultipleGitRepositoryManagerImpl">
+	<beans:bean id="gitManager" class="jiracommitviewer.DefaultRepositoryManager">
 		<beans:constructor-arg index="0" ref="versionManager" />
 		<beans:constructor-arg index="1" ref="issueManager" />
 		<beans:constructor-arg index="2" ref="permissionManager" />
 		<beans:constructor-arg index="3" ref="changeHistoryManager" />
-		<beans:constructor-arg index="4" ref="jiraPropertySetFactory" />
-		<beans:constructor-arg index="5" ref="indexPathManager" />
+		<beans:constructor-arg index="4" ref="pluginSettingsFactory" />
 	</beans:bean>
+	
+	<beans:bean id="repositoryServiceHelper" class="jiracommitviewer.repository.service.RepositoryServiceHelper"/>
+	<beans:bean id="gitRepositoryService" class="jiracommitviewer.repository.service.DefaultGitRepositoryService"/>
 
-    <beans:bean id="revisionIndexer" class="jiracommitviewer.revisions.RevisionIndexer">
-        <beans:constructor-arg index="0" ref="gitManager" />
-        <beans:constructor-arg index="1" ref="versionManager" />
-        <beans:constructor-arg index="2" ref="issueManager" />
-        <beans:constructor-arg index="3" ref="permissionManager" />
-        <beans:constructor-arg index="4" ref="changeHistoryManager" />
-        <beans:constructor-arg index="5" ref="indexPathManager" />
+    <beans:bean id="revisionIndexer" class="jiracommitviewer.index.GitCommitIndexer">
     </beans:bean>
 
     <beans:bean id="schedulerComponent" class="jiracommitviewer.revisions.scheduling.UpdateIndexMonitorImpl">
-        <beans:constructor-arg index="0" ref="pluginScheduler" />
-        <beans:constructor-arg index="1" ref="gitManager" />
+    	<beans:constructor-arg index="0" ref="gitManager" />
+        <beans:constructor-arg index="1" ref="pluginScheduler" />
+        <beans:constructor-arg index="2" ref="revisionIndexer" />
     </beans:bean>
 
     <osgi:service id="schedulerComponentService" ref="schedulerComponent" interface="com.atlassian.sal.api.lifecycle.LifecycleAware"/>

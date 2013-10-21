@@ -1,23 +1,23 @@
 package jiracommitviewer.action;
 
-import jiracommitviewer.GitManager;
-import jiracommitviewer.MultipleGitRepositoryManager;
+import jiracommitviewer.RepositoryManager;
+import jiracommitviewer.domain.AbstractRepository;
 
 @SuppressWarnings("serial")
 public class DeleteGitRepositoryAction extends GitActionSupport {
 	
-	private Object repositoryId;
-	private GitManager gitManager;
+	private String repositoryId;
+	private AbstractRepository repository;
 
-	public DeleteGitRepositoryAction(final MultipleGitRepositoryManager manager) {
+	public DeleteGitRepositoryAction(final RepositoryManager manager) {
 		super(manager);
 	}
 
-	public Object getRepoId() {
+	public String getRepositoryId() {
 		return repositoryId;
 	}
 
-	public void setRepositoryId(Object repositoryId) {
+	public void setRepositoryId(final String repositoryId) {
 		this.repositoryId = repositoryId;
 	}
 
@@ -26,7 +26,7 @@ public class DeleteGitRepositoryAction extends GitActionSupport {
             return PERMISSION_VIOLATION_RESULT;
         }
 
-		gitManager = getMultipleRepoManager().getRepository(repositoryId);
+		repository = repositoryManager.getRepository(repositoryManager.parseRepositoryId(repositoryId));
 		return INPUT;
 	}
 
@@ -35,11 +35,11 @@ public class DeleteGitRepositoryAction extends GitActionSupport {
             return PERMISSION_VIOLATION_RESULT;
         }
 
-		getMultipleRepoManager().removeRepository(repositoryId);
+		repositoryManager.removeRepository(repositoryManager.parseRepositoryId(repositoryId));
 		return getRedirect("ViewGitRepositories.jspa");
 	}
 
-	public GitManager getGitManager() {
-		return gitManager;
+	public AbstractRepository getRepository() {
+		return repository;
 	}
 }

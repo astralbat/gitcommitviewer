@@ -1,0 +1,68 @@
+#disable_html_escaping()
+<table cellpadding="2" cellspacing="0" border="0" width="100%">
+	<tr>
+    	<td bgcolor="#f0f0f0" width="10%"><b>$i18n.getText("git.issue-tab.repository")</b></td>
+    	<td bgcolor="#f0f0f0" width="10%"><b>$i18n.getText("git.issue-tab.branch")</b></td>
+    	<td bgcolor="#f0f0f0" width="8%"><b>$i18n.getText("git.issue-tab.commit")</b></td>
+    	<td bgcolor="#f0f0f0" width="14%"><b>$i18n.getText("git.issue-tab.date")</b></td>
+    	<td bgcolor="#f0f0f0" width="11%"><b>$i18n.getText("git.issue-tab.user")</b></td>
+    	<td bgcolor="#f0f0f0"><b>$i18n.getText("git.issue-tab.message")</b></td>
+	</tr>
+	<tr>
+    	<td bgcolor="#ffffff" width="10%" valign="top" rowspan="3">$textutils.htmlEncode($git.repositoryDisplayName)</td>
+    	<td bgcolor="#ffffff" width="10%" valign="top" rowspan="3">#if ($textutils.htmlEncode($git.logEntry.branch)) $textutils.htmlEncode($git.logEntry.branch) #else $i18n.getText("git.issue-tab.unknown") #end</td>
+    	<td bgcolor="#ffffff" width="8%" valign="top" rowspan="3">$git.linkRenderer.getChangesetLink($git.logEntry)</td>
+    	<td bgcolor="#ffffff" width="14%" valign="top" rowspan="3">$!git.logEntry.date</td>
+    	<td bgcolor="#ffffff" width="11%" valign="top" rowspan="3">$textutils.htmlEncode($stringUtils.defaultString($git.logEntry.author))</td>
+    	<td bgcolor="#ffffff">#makelinkedhtml($git.logEntry.getMessage().trim())</td>
+	</tr>
+	<tr>
+    	<td bgcolor="#f0f0f0"><b>$i18n.getText("git.issue-tab.files-changed")</b></td>
+	</tr>
+	<tr>
+    	<td bgcolor="#ffffff">
+        	#foreach ($committedFile in $git.logEntry.committedFiles)
+            	#if ($git.isDeleted($committedFile) == true)
+                	<font color="#990000" size="-2"><b title="Delete">$i18n.getText("git.issue-tab.deleted")</b></font>
+                	$git.linkRenderer.getFileDeletedLink($git.logEntry, $committedFile)
+            	#elseif ($git.isAdded($committedFile) == true)
+                	<font color="#009900" size="-2"><b title="Add">$i18n.getText("git.issue-tab.added")</b></font>
+            		$git.linkRenderer.getFileAddedLink($git.logEntry, $committedFile)
+            	#elseif ($git.isModified($committedFile) == true)
+                	<font color="#999933" size="-2"><b title="Modify">$i18n.getText("git.issue-tab.modified")</b></font>
+                	$git.linkRenderer.getFileModifiedLink($git.logEntry, $committedFile)
+            	#elseif ($git.isReplaced($committedFile) == true)
+                	<font color="#999933" size="-2"><b title="Replace">$i18n.getText("git.issue-tab.replaced")</b></font>
+                	$git.linkRenderer.getFileRenamedLink($git.logEntry, $committedFile)
+                	(from $git.linkRenderer.getFileReplacedLink($git.logEntry, $committedFile))
+            	#elseif ($git.isCopied($committedFile) == true)
+                	<font color="#999933" size="-2"><b title="Copy">$i18n.getText("git.issue-tab.copied")</b></font>
+                	$git.linkRenderer.getFileReplacedLink($git.logEntry, $committedFile)
+                	(from $git.linkRenderer.getFileCopiedLink($git.logEntry, $committedFile))
+            	#end
+            	<br>
+        	#end
+    	</td>
+	</tr>
+</table>
+
+#set ($innerClassSeparator = "$")
+#set ($lastGitCommitActionName = "LastGitCommitActionInPage")
+
+#if ($git.class.name == "jiracommitviewer.issuetabpanels.gitRevisionsTabPanel${innerClassSeparator}${lastGitCommitActionName}")
+    <div class="plugin_git_showmore_issuetab">
+        <fieldset style="display: none">
+            <input type="hidden" name="issueKey" value="">
+            <input type="hidden" name="page" value="com.atlassian.jira.plugin.ext.git:git-commits-tabpanel">
+            <input type="hidden" name="decorator" value="none">
+            #if ($req.getParameter("pageIndex"))
+                #set ($newPageIndex = $textutils.parseInt($req.getParameter("pageIndex")) + 1)
+                <input type="hidden" name="pageIndex" value="$newPageIndex">
+            #else
+                <input type="hidden" name="pageIndex" value="1">
+            #end
+            <input type="hidden" name="pageSize" value="$!req.getParameter('pageSize')">
+        </fieldset>
+        <input class="plugin_git_showmore_issuetab_button" type="button" value="More">
+    </div>
+#end

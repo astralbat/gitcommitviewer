@@ -1,23 +1,29 @@
 package jiracommitviewer.action;
 
-import jiracommitviewer.GitManager;
-import jiracommitviewer.MultipleGitRepositoryManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import jiracommitviewer.RepositoryManager;
+import jiracommitviewer.domain.AbstractRepository;
+import jiracommitviewer.repository.exception.RepositoryException;
 
 @SuppressWarnings("serial")
 public class ActivateGitRepositoryAction extends GitActionSupport {
+	
+	private static final Logger logger = LoggerFactory.getLogger(ActivateGitRepositoryAction.class);
 
-	private Object repositoryId;
-	private GitManager gitManager;
+	private String repositoryId;
+	private AbstractRepository repository;
 
-	public ActivateGitRepositoryAction(MultipleGitRepositoryManager manager) {
+	public ActivateGitRepositoryAction(final RepositoryManager manager) {
 		super(manager);
 	}
 
-	public Object getRepositoryId() {
+	public String getRepositoryId() {
 		return repositoryId;
 	}
 
-	public void setRepositoryId(Object repositoryId) {
+	public void setRepositoryId(final String repositoryId) {
 		this.repositoryId = repositoryId;
 	}
 
@@ -26,15 +32,17 @@ public class ActivateGitRepositoryAction extends GitActionSupport {
             return PERMISSION_VIOLATION_RESULT;
         }
 
-		gitManager = getMultipleRepoManager().getRepository(repositoryId);
-		gitManager.activate();
-		if (!gitManager.isActive()) {
-			addErrorMessage(getText("git.repository.activation.failed", gitManager.getInactiveMessage()));
+		repository = getRepositoryManager().getRepository(repositoryManager.parseRepositoryId(repositoryId));
+		try {
+			repositoryServiceHelper.getRepositoryService(repository).activate(repository);
+		} catch (final RepositoryException re) {
+			logger.error("Error activating repository: " + repository.getDisplayName(), re);
+			addErrorMessage(getText("git.repository.activation.failed", re.getMessage()));
 		}
 		return SUCCESS;
 	}
 
-	public GitManager getSubversionManager() {
-		return gitManager;
+	public AbstractRepository getRepository() {
+		return repository;
 	}
 }

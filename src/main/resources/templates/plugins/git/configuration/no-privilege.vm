@@ -3,8 +3,8 @@
  		<div class="errorArea">
 			<h4>Error</h4>
 			<ul>
-					<li>$action.getText("git.admin.privilege.required")</li>
+				<li>$action.getText("git.admin.privilege.required")</li>
 			</ul>
-    </div>
+		</div>
    </td>
 </tr>

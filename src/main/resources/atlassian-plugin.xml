@@ -6,28 +6,40 @@
         <param name="plugin-icon">images/pluginIcon.png</param>
         <param name="plugin-logo">images/pluginLogo.png</param>
     </plugin-info>
-
-    <!-- add our i18n resource -->
-    <resource type="i18n" name="i18n" location="gitcommitplugin"/>
-    
-    <!-- add our web resources -->
-    <web-resource key="gitcommitplugin-resources" name="gitcommitplugin Web Resources">
-        <dependency>com.atlassian.auiplugin:ajs</dependency>
-        
-        <resource type="download" name="gitcommitplugin.css" location="/css/gitcommitplugin.css"/>
-        <resource type="download" name="gitcommitplugin.js" location="/js/gitcommitplugin.js"/>
-        <resource type="download" name="images/" location="/images"/>
-
-        <context>gitcommitplugin</context>
-    </web-resource>
     
     <!-- import from the product container -->
     <component-import key="applicationProperties" interface="com.atlassian.sal.api.ApplicationProperties" />
+    
+    <!-- add our i18n resource -->
+    <resource type="i18n" name="i18n" location="gitcommitplugin"/>
+    <resource type="i18n" name="GitActionSupport" location="jiracommitviewer.action.GitActionSupport" />
+    <!-- this property file contains i18n keys for the panel -->
+    <resource type="i18n" name="projecttabpanels-git_jira_plugin" location="templates.plugins.git.projecttabpanels.git_jira_plugin"/>
+    <resource type="i18n" name="issuetabpanels-git_jira_plugin" location="templates.plugins.git.issuetabpanels.git_jira_plugin"/>
+    
+    <issue-tabpanel key="git-commits-tabpanel" name="Git Changes Tab Panel" class="jiracommitviewer.issuetabpanels.GitCommitTabPanel">
+        <description>Show Git commits related to an issue in an issue tab panel.</description>
+        <label key="git.issue-tab.label" />
+        <resource type="velocity" name="view" location="templates/plugins/git/issuetabpanels/git-commits-view.vm"/>
+        <supports-ajax-load>true</supports-ajax-load>
+    </issue-tabpanel>
+    
+    <project-tabpanel key="git-project-tab" name="Git Commits Project Tab" class="jiracommitviewer.projecttabpanels.GitProjectTabPanel">
+        <description key="git.project-tab.description"/>
+        <label key="git.project-tab.label" />
+        <!-- this is a number defining the order of all project tabs. The system panels are 10, 20, 30 and 40. -->
+        <order>50</order>
+        <!-- this template produces the HTML for the panel -->
+        <resource type="velocity" name="view" location="templates/plugins/git/projecttabpanels/git-project-tab.vm"/>
+    </project-tabpanel>
     
     <component-import key="pluginScheduler">
     	<description>SAL Scheduler</description>
     	<interface>com.atlassian.sal.api.scheduling.PluginScheduler</interface>
 	</component-import>
+	
+	<!-- Makes PluginSettingsFactory available to your plugin. -->
+    <component-import key="pluginSettingsFactory" interface="com.atlassian.sal.api.pluginsettings.PluginSettingsFactory" />
     
     <web-item key="git-repositories-link" name="Git repositories link on administrators page" section="admin_plugins_menu/source_control" weight="95">
         <label key="git.repositories" />

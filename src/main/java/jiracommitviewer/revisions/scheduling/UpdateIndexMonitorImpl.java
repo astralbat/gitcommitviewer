@@ -1,31 +1,35 @@
 package jiracommitviewer.revisions.scheduling;
 
-import com.atlassian.core.exception.InfrastructureException;
-import com.atlassian.sal.api.lifecycle.LifecycleAware;
-import com.atlassian.sal.api.scheduling.PluginScheduler;
+import java.util.Date;
+import java.util.HashMap;
+
+import jiracommitviewer.RepositoryManager;
+import jiracommitviewer.index.GitCommitIndexer;
 
 import org.joda.time.DateTimeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 
-import java.util.Date;
-import java.util.HashMap;
-
-import jiracommitviewer.MultipleGitRepositoryManager;
+import com.atlassian.core.exception.InfrastructureException;
+import com.atlassian.sal.api.lifecycle.LifecycleAware;
+import com.atlassian.sal.api.scheduling.PluginScheduler;
 
 public class UpdateIndexMonitorImpl implements UpdateIndexMonitor, LifecycleAware, DisposableBean {
 	
 	private static final String JOB_NAME = UpdateIndexMonitorImpl.class.getName() + ":job";
     private final static Logger logger = LoggerFactory.getLogger(UpdateIndexMonitorImpl.class);
+    private final RepositoryManager repositoryManager;
 	private final PluginScheduler pluginScheduler;
-    private final MultipleGitRepositoryManager multipleGitRepositoryManager;
+    private final GitCommitIndexer gitCommitIndexer;
 
-    private static final long DEFAULT_INDEX_INTERVAL = DateTimeConstants.MILLIS_PER_HOUR;
+    private static final long DEFAULT_INDEX_INTERVAL = DateTimeConstants.MILLIS_PER_MINUTE;
 
-	public UpdateIndexMonitorImpl(final PluginScheduler pluginScheduler, final MultipleGitRepositoryManager multipleGitRepositoryManager) {
+	public UpdateIndexMonitorImpl(final RepositoryManager repositoryManager, 
+			final PluginScheduler pluginScheduler, final GitCommitIndexer gitCommitIndexer) {
+		this.repositoryManager = repositoryManager;
 		this.pluginScheduler = pluginScheduler;
-        this.multipleGitRepositoryManager =  multipleGitRepositoryManager;
+        this.gitCommitIndexer =  gitCommitIndexer;
 	}
 	
 	public void onStart() {
@@ -39,7 +43,8 @@ public class UpdateIndexMonitorImpl implements UpdateIndexMonitor, LifecycleAwar
                 UpdateIndexTask.class,
                 new HashMap<String, Object>() {{
                     put("UpdateIndexMonitorImpl:instance", UpdateIndexMonitorImpl.this);
-                    put("MultipleSubversionRepositoryManager", multipleGitRepositoryManager);
+                    put("GitCommitIndexer", gitCommitIndexer);
+                    put("RepositoryManager", repositoryManager);
                 }},
                 new Date(),
                 DEFAULT_INDEX_INTERVAL);
