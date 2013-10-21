@@ -238,6 +238,13 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <scm>
+        <connection>scm:git:https://github.com/gitcommitviewer.git</connection>
+        <url>scm:git:https://github.com/gitcommitviewer.git</url>
+        <developerConnection>scm:git:[fetch=]https://github.com/astralbat/gitcommitviewer.git[push=]ssh://git@github.com:astralbat/gitcommitviewer.git</developerConnection>
+    </scm>
+
     <properties>
         <jira.version>6.1-20130626</jira.version>
         <amps.version>4.2.9</amps.version>
