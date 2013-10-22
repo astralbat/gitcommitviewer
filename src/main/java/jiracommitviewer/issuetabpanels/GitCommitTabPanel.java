@@ -78,7 +78,7 @@ public class GitCommitTabPanel extends AbstractIssueTabPanel {
             		gitCommitIndexer.getAllLogEntriesByIssue(issue, getPageRequestParameter(), pageSize);
 
             if (logEntries.isEmpty()) {
-                final GenericMessageAction action = new GenericMessageAction(getText("no.log.entries.message"));
+                final GenericMessageAction action = new GenericMessageAction(getText("git.no.log.entries.message"));
                 return EasyList.build(action);
             } else {
                 List<GitCommitAction> actions = new ArrayList<GitCommitAction>();
