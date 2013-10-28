@@ -13,12 +13,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import jiracommitviewer.RepositoryManager;
+import jiracommitviewer.domain.AddedCommitFile;
+import jiracommitviewer.domain.Commit;
 import jiracommitviewer.domain.GitCommitKey;
 import jiracommitviewer.domain.GitRepository;
 import jiracommitviewer.domain.LogEntry;
 import jiracommitviewer.index.CommitIndexer;
 import jiracommitviewer.index.GitCommitIndexer;
 import jiracommitviewer.index.exception.IndexException;
+import jiracommitviewer.repository.RepositoryTestUtils;
 import jiracommitviewer.repository.exception.RepositoryException;
 import jiracommitviewer.repository.service.DefaultGitRepositoryService;
 import jiracommitviewer.repository.service.GitRepositoryService;
@@ -238,6 +241,67 @@ public class GitCommitIndexerTest {
 		final Iterator<LogEntry<GitRepository, GitCommitKey>> logEntries = 
 				commitIndexer.getAllLogEntriesByVersion(version, user, 0, 5).iterator();
 		Assert.assertTrue("Expected to find marker commit in history", hasCommit("095014f90aac621901d29e1e3986ad5f9e52361a", logEntries));
+	}
+	
+	/**
+	 * Commits are added to a repository, it is indexed and another commit is added. This new commit
+	 * must be indexed also.
+	 * 
+	 * @throws IOException 
+	 * @throws URISyntaxException 
+	 * @throws RepositoryException 
+	 * @throws IndexException 
+	 */
+	@Test
+	public void testIndexNewCommits(final MutableIssue issue) throws URISyntaxException, IOException, RepositoryException, IndexException {
+		final GitRepository gitRepository = RepositoryTestUtils.getCreatedRepository(realRepositoryService);
+		
+		// Commit file initially
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("initialFile"), "content".getBytes());
+		Commit<GitRepository> initialCommit = new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-1 testMessage", 
+				new AddedCommitFile("initialFile"));
+		realRepositoryService.commit(gitRepository, initialCommit);
+		
+		new NonStrictExpectations() {{
+			new MockUp<JiraKeyUtils>() {
+				@Mock
+				public boolean isKeyInString(final String s) {
+					return true;
+				}
+				@Mock
+				public List<String> getIssueKeysFromString(final String s) {
+					Set<String> keys = new HashSet<String>();
+					Pattern issuePattern = Pattern.compile("GCV-[0-9]+");
+					Matcher matcher = issuePattern.matcher(s);
+					int index = 0;
+					while (matcher.find(index)) {
+						keys.add(matcher.group());
+						index = matcher.end();
+					}
+					return new ArrayList<String>(keys);
+				}
+			};
+			
+			indexPathManager.getPluginIndexRootPath(); result = new File(ClassLoader.getSystemResource("indexes").toURI()).getPath();
+			issue.getKey(); result = "GCV-2";
+			repositoryManager.getRepository(anyString); result = gitRepository;
+		}};
+		
+		// Index initially
+		commitIndexer.index(gitRepository);
+		
+		// Commit another file
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("secondFile"), "content".getBytes());
+		Commit<GitRepository> secondCommit = new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-2 testMessage", 
+				new AddedCommitFile("secondFile"));
+		realRepositoryService.commit(gitRepository, secondCommit);
+		
+		// Index again
+		commitIndexer.index(gitRepository);
+		
+		// Assert that the new file was indexed
+		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 1);
+		Assert.assertEquals("Expected a log entry for the new issue", 1, logEntries.size());
 	}
 	
 	/**

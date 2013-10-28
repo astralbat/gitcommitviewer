@@ -1,5 +1,6 @@
 package jiracommitviewer.repository.service;
 
+import jiracommitviewer.domain.Commit;
 import jiracommitviewer.domain.GitCommitKey;
 import jiracommitviewer.domain.GitRepository;
 import jiracommitviewer.repository.exception.RepositoryException;
@@ -35,4 +36,25 @@ public interface GitRepositoryService extends RepositoryService<GitRepository, G
 	 * @throws RepositoryException if an error occurs whilst checking
 	 */
 	boolean isCloned(GitRepository repository) throws RepositoryException;
+	
+	/**
+	 * Creates a new, non-bare repository at the location specified by the URI within {@code repository}, creates a new
+	 * master branch and checks it out.
+	 * <p>
+	 * Only the file:// scheme is supported for creating new reposotories.
+	 * 
+	 * @param repository the repository to create. Must not be {@code null}
+	 */
+	void create(final GitRepository repository);
+	
+	/**
+	 * Makes a commit to the repository from the specified {@code logEntry}.
+	 * <p>
+	 * Paths are added, modified and removed by inspecting the {@code logEntry}'s committed files.
+	 * 
+	 * @param repository the repository to commit to. Must not be {@code null}
+	 * @param commit the commit with files to commit. Must not be {@code null}
+	 * @throws RepositoryException if an error occurs whilst committing
+	 */
+	void commit(final GitRepository repository, final Commit<GitRepository> commit) throws RepositoryException;
 }

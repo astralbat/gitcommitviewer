@@ -1,6 +1,7 @@
 package jiracommitviewer.repository.service;
 
 import java.io.File;
+import java.util.Set;
 
 import jiracommitviewer.domain.AbstractCommitKey;
 import jiracommitviewer.domain.AbstractRepository;
@@ -39,15 +40,16 @@ public interface RepositoryService<R extends AbstractRepository, K extends Abstr
 	
 	/**
 	 * Gets an iterator of log entries from the repository that are after, in sequence, the specified
-	 * {@code gitCommitKey}.
+	 * {@code commitKey}.
 	 * 
 	 * @param repository the repository. Must not be {@code null}
-	 * @param commitKey the commit key. When {@code null}, all log entries are returned from the beginning
+	 * @param commitKeys the commit keys to exclude these commits and all their parents. When {@code null}, all log entries are 
+	 * returned from the beginning
 	 * @return an enumerator for reading log entries sequentially. Never {@code null}
 	 * @throws RepositoryException if {@code commitKey} is not {@code null} and the identified commit does not exist; or
 	 * if there is an error while accessing the repository
 	 */
-	LogEntryEnumerator<R, K> getLogEntries(final R repository, K commitKey) throws RepositoryException;
+	LogEntryEnumerator<R, K> getLogEntries(R repository, Set<K> commitKeys) throws RepositoryException;
 	
 	/**
 	 * Gets the log entry for the commit specified by {@code commitKey}.
@@ -58,5 +60,5 @@ public interface RepositoryService<R extends AbstractRepository, K extends Abstr
 	 * @throws RepositoryException if {@code commitKey} is not {@code null} and the identified commit does not exist; or
 	 * if there is an error while accessing the repository
 	 */
-	LogEntry<R, K> getLogEntry(final R repository, K commitKey) throws RepositoryException;
+	LogEntry<R, K> getLogEntry(R repository, K commitKey) throws RepositoryException;
 }

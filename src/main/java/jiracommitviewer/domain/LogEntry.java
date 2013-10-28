@@ -12,17 +12,13 @@ import org.apache.commons.lang3.Validate;
  * 
  * @author mark
  */
-public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<K>> {
+public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<K>> extends AbstractLogEntry<R> {
 	
 	private static final DateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 	
 	private K commitKey;
 	private K parentCommitKey;
-	private final String author;
 	private final Date date;
-	private final String message;
-	private final List<CommitFile> committedFiles;
-	private final R repository;
 	private String branch;
 	
 	/**
@@ -32,55 +28,21 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	 * @param branch the branch on which the log entry resides. May be {@code null} if not specified or unknown
 	 * @param commitKey the key for the commit. Must not be {@code null}
 	 * @param parentCommitKey the parent of the commit. May be {@code null} if there is no parent
-	 * @param author the author of the commit. Must not be {@code null}
+	 * @param authorName the name of the author of the commit. Must not be {@code null}
 	 * @param date the date of the commit. Must not be {@code null}
 	 * @param message the commit message. Must not be {@code null}
-	 * @param committedFiles the list of files commmitted during this commit. Must not be {@code null}
+	 * @param commitFiles the list of files commmitted during this commit. Must not be {@code null}
 	 */
-	public LogEntry(final R repository, final String branch, final K commitKey, final K parentCommitKey, final String author, 
-			final Date date, final String message, final List<CommitFile> committedFiles) {
-		Validate.notNull(repository, "repository must not be null");
-		Validate.notNull(commitKey, "commitKey must not be null");
-		Validate.notNull(author, "author must not be null");
-		Validate.notNull(date, "date must not be null");
-		Validate.notNull(message, "message must not be null");
-		Validate.notNull(committedFiles, "committedFiles must not be null");
+	public LogEntry(final R repository, final String branch, final K commitKey, final K parentCommitKey, final String authorName, 
+			final Date date, final String message, final List<CommitFile> commitFiles) {
+		super(repository, authorName, message, commitFiles);
 		
-		this.repository = repository;
-		this.branch = branch;
+		Validate.notNull(date, "date must not be null");
+		
 		this.commitKey = commitKey;
 		this.parentCommitKey = parentCommitKey;
-		this.author = author;
-		this.date = date;
-		this.message = message;
-		this.committedFiles = committedFiles;
-	}
-	
-	/**
-	 * Gets the repository to which this log entry belongs.
-	 * 
-	 * @return the repository. Never {@code null}
-	 */
-	public R getRepository() {
-		return repository;
-	}
-	
-	/**
-	 * Gets the branch this commit was made on.
-	 * 
-	 * @return the branch. Will be {@code null} if the branch was not specified or is unknown
-	 */
-	public String getBranch() {
-		return branch;
-	}
-	
-	/**
-	 * Sets the branch this commit was made on.
-	 * 
-	 * @param branch the branch. May be {@code null} if the branch is not known
-	 */
-	public void setBranch(final String branch) {
 		this.branch = branch;
+		this.date = date;
 	}
 	
 	/**
@@ -102,12 +64,21 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	}
 	
 	/**
-	 * The author of the log entry.
+	 * Gets the branch this commit was made on.
 	 * 
-	 * @return the author. Never {@code null}
+	 * @return the branch. Will be {@code null} if the branch was not specified or is unknown
 	 */
-	public String getAuthor() {
-		return author;
+	public String getBranch() {
+		return branch;
+	}
+	
+	/**
+	 * Sets the branch this commit was made on.
+	 * 
+	 * @param branch the branch. May be {@code null} if the branch is not known
+	 */
+	public void setBranch(final String branch) {
+		this.branch = branch;
 	}
 	
 	/**
@@ -120,31 +91,12 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	}
 	
 	/**
-	 * Gets the message behind the log entry. The message may be surrounded by additional
-	 * white space.
-	 * 
-	 * @return the message. Never {@code null}
-	 */
-	public String getMessage() {
-		return message;
-	}
-	
-	/**
-	 * Gets a list of all files that have changed against this commit
-	 * 
-	 * @return the list of all changed files. Never {@code null}
-	 */
-	public List<CommitFile> getCommittedFiles() {
-		return committedFiles;
-	}
-	
-	/**
 	 * Returns a sensible string representation of this log entry that's useful
 	 * for debugging.
 	 * 
 	 * @return a string representation
 	 */
 	public String toString() {
-		return commitKey.marshal() + "; " + dateFormatter.format(date) + "; " + author + "; " + message;
+		return getCommitKey().marshal() + "; " + dateFormatter.format(date) + "; " + getAuthorName() + "; " + getMessage();
 	}
 }

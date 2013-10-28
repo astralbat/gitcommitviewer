@@ -80,7 +80,9 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     @Autowired
     private IndexPathManager indexPathManager;
     
-    private final Hashtable<Object, GitCommitKey> latestIndexedRevisionTbl = new Hashtable<Object, GitCommitKey>();
+    private final Hashtable<Object, Map<String, GitCommitKey>> branchIndexedCommitTbl = new Hashtable<Object, Map<String, GitCommitKey>>();
+    private final Hashtable<Object, Set<GitCommitKey>> frequentIndexedCommitTbl = new Hashtable<Object, Set<GitCommitKey>>();
+    private int frequentIndexedCount = 0;
     private LuceneIndexAccessor indexAccessor;
 
     public GitCommitIndexer() {
@@ -353,9 +355,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
      */
     @Override
     public void removeEntries(final GitRepository repository) throws IndexException {
-        if (logger.isDebugEnabled()) {
-            logger.debug("Deleteing log entries for: " + repository.getId());
-        }
+        logger.debug("Deleteing log entries for: " + repository.getId());
         
         // Create indexes if necessary to prevent getting an error
         createIndexIfNeeded();
@@ -365,7 +365,8 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	        try {
 	            writer = indexAccessor.getIndexWriter(getIndexPath().getPath(), false, ANALYZER);
 	            writer.deleteDocuments(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId())));
-	            latestIndexedRevisionTbl.remove(repository.getId());
+	            branchIndexedCommitTbl.remove(repository.getId());
+	            frequentIndexedCommitTbl.remove(repository.getId());
 	        } finally {
 	            if (writer != null) {
 	            	writer.close();
@@ -405,19 +406,30 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     private void updateIndex(final GitRepository repository) throws IndexException, RepositoryException {
     	assert repository != null : "repository must not be null";
     	
-    	if (logger.isDebugEnabled()) {
-            logger.debug("Updating commit index for repository: " + repository.getId());
-        }
+        logger.debug("Updating commit index for repository: " + repository.getId());
+        
+        // Operate on clones of the global state. This way we shall 'commit' them to the global state only if we
+        // are successful. If we don't do this, failures will cause earlier parts of the graph to remain unindexed.
+        @SuppressWarnings("unchecked")
+		final Hashtable<Object, Map<String, GitCommitKey>> branchIndexedCommitTbl = 
+        		(Hashtable<Object, Map<String, GitCommitKey>>)this.branchIndexedCommitTbl.clone();
+        @SuppressWarnings("unchecked")
+		final Hashtable<Object, Set<GitCommitKey>> frequentIndexedCommitTbl = 
+        		(Hashtable<Object, Set<GitCommitKey>>)this.frequentIndexedCommitTbl.clone();
+        int frequentIndexedCount = this.frequentIndexedCount;
     	
         try {
-        	// Get the last commit key, forcing retrieval if necessary
-            GitCommitKey latestCommitKey = getLatestCommitKey(repository.getId());
-            if (latestCommitKey == null) {
-            	latestCommitKey = updateLastCommitKey(repository);
+        	// Make sure latest/frequent hashes are initialised
+            if (branchIndexedCommitTbl.get(repository.getId()) == null) {
+            	branchIndexedCommitTbl.put(repository.getId(), new HashMap<String, GitCommitKey>());
+            	frequentIndexedCommitTbl.put(repository.getId(), updateFrequentIndexedCommitTable(repository));
             }
 
+            final Set<GitCommitKey> commitKeys = new HashSet<GitCommitKey>();
+            commitKeys.addAll(branchIndexedCommitTbl.get(repository.getId()).values());
+            commitKeys.addAll(frequentIndexedCommitTbl.get(repository.getId()));
             final LogEntryEnumerator<GitRepository, GitCommitKey> logEntryEnumerator = 
-            		gitRepositoryService.getLogEntries(repository, latestCommitKey);
+            		gitRepositoryService.getLogEntries(repository, commitKeys);
 
             final IndexWriter writer = indexAccessor.getIndexWriter(getIndexPath().getPath(), false, ANALYZER);
 
@@ -430,13 +442,18 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
                 		if (TextUtils.stringSet(logEntry.getMessage()) && isKeyInString(logEntry)) {
                 			if (!hasDocument(repository, logEntry.getCommitKey(), reader)) {
                 				final Document doc = getDocument(repository, logEntry);
-                				if (logger.isDebugEnabled()) {
-                					logger.debug("Indexing repository: " + repository.getId() + ", commit: " + logEntry.getCommitKey().marshal());
-                				}
+                				logger.debug("Indexing repository: " + repository.getId() + ", commit: " + 
+                						logEntry.getCommitKey().marshal());
                 				writer.addDocument(doc);
-                				if (latestCommitKey == null || logEntry.getCommitKey().compareTo(latestCommitKey) < 0) {
-                					latestCommitKey = logEntry.getCommitKey();
-                					latestIndexedRevisionTbl.put(repository.getId(), latestCommitKey);
+                				if (frequentIndexedCount++ % 100 == 0) {
+                					frequentIndexedCommitTbl.get(repository.getId()).add(logEntry.getCommitKey());
+                				}
+                				// Update the latest branch indexed. Branch should never be null while indexing
+                				if (branchIndexedCommitTbl.get(repository.getId()).get(logEntry.getBranch()) != null) {
+                					if (logEntry.getCommitKey().compareTo(branchIndexedCommitTbl.get(repository.getId())
+                							.get(logEntry.getBranch())) > 0) {
+                						branchIndexedCommitTbl.get(repository.getId()).put(logEntry.getBranch(), logEntry.getCommitKey());
+                					}
                 				}
                 			}
                 		}
@@ -444,6 +461,12 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
                 } finally {
                     reader.close();
                 }
+                // 'Commit' to global state
+                this.branchIndexedCommitTbl.clear();
+                this.branchIndexedCommitTbl.putAll(branchIndexedCommitTbl);
+                this.frequentIndexedCommitTbl.clear();
+                this.frequentIndexedCommitTbl.putAll(frequentIndexedCommitTbl);
+                this.frequentIndexedCount = frequentIndexedCount;
             } finally {
                 writer.close();
             }
@@ -460,7 +483,8 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
      * @param reader the index reader. Must not be {@code null}
      * @throws IndexException if a problem occurs reading the index
      */
-    private boolean hasDocument(final GitRepository gitRepository, final GitCommitKey commitKey, final IndexReader reader) throws IndexException {
+    private boolean hasDocument(final GitRepository gitRepository, final GitCommitKey commitKey, final IndexReader reader) 
+    		throws IndexException {
     	assert gitRepository != null : "gitRepository must not be null";
     	assert commitKey != null : "commitKey must not be null";
     	assert reader != null : "reader must not be null";
@@ -532,8 +556,8 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 
         doc.add(new Field(FIELD_MESSAGE, logEntry.getMessage(), Field.Store.YES, Field.Index.NOT_ANALYZED));
 
-        if (logEntry.getAuthor() != null) {
-            doc.add(new Field(FIELD_AUTHOR, logEntry.getAuthor(), Field.Store.YES, Field.Index.NOT_ANALYZED));
+        if (logEntry.getAuthorName() != null) {
+            doc.add(new Field(FIELD_AUTHOR, logEntry.getAuthorName(), Field.Store.YES, Field.Index.NOT_ANALYZED));
         }
 
         doc.add(new Field(FIELD_REPOSITORY, String.valueOf(gitRepository.getId()), Field.Store.YES, Field.Index.NOT_ANALYZED));
@@ -563,14 +587,14 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     }
     
     /**
-     * Gets the last {@code CommitKey} indexed by the indexer for repository {@code repository}.
+     * Gets the last {@code CommitKey}s indexed by the indexer for repository {@code repository}.
      * 
-     * @param repository the repository to get the last indexed commit for. Must not be {@code null}
-     * @return the last commit key. Will be {@code null} if there are no indexed commits
+     * @param repository the repository to get the last indexed commits for. Must not be {@code null}
+     * @return the last commit key map of branch -> commit. Never {@code null}
      * @throws IndexException
      * @throws IOException
      */
-    private GitCommitKey updateLastCommitKey(final AbstractRepository repository) throws IndexException {
+    private Set<GitCommitKey> updateFrequentIndexedCommitTable(final AbstractRepository repository) throws IndexException {
     	assert repository != null : "repository must not be null";
     	
         if (logger.isDebugEnabled()) {
@@ -579,7 +603,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 
         // find all log entries that have already been indexed for the specified repository
         // (i.e. all logs that have been associated with issues in JIRA)
-        GitCommitKey latestCommitKey = latestIndexedRevisionTbl.get(repository.getId());
+        final Set<GitCommitKey> commitKeySet = new HashSet<GitCommitKey>();
 
         final IndexReader reader;
         try {
@@ -591,20 +615,16 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
         final IndexSearcher searcher = new IndexSearcher(reader);
         try {
 	        try {
-	            final TopDocs hits = searcher.search(new TermQuery(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId()))), MAX_COMMITS);
+	            final TopDocs hits = searcher.search(new TermQuery(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId()))), 
+	            		MAX_COMMITS, new Sort(new SortField(FIELD_DATE, SortField.STRING, true)));
 	
+	            int count = 0;
 	            for (int i = 0; i < Math.min(hits.totalHits, MAX_COMMITS); ++i) {
 	                final Document doc = searcher.doc(hits.scoreDocs[i].doc);
 	                final GitCommitKey commitKey = GitCommitKey.unmarshal(doc.get(FIELD_COMMITKEY));
-	                if (latestCommitKey == null || commitKey.compareTo(latestCommitKey) < 0) {
-	                	latestCommitKey = commitKey;
+	                if (count++ % 100 == 0) {
+	                	commitKeySet.add(commitKey);
 	                }
-	            }
-	            if (latestCommitKey == null) {
-	            	logger.debug("Latest Index Commit for " + repository.getId() + " = (none found)");
-	            } else {
-	            	logger.debug("Latest Index Commit for " + repository.getId() + " = " + latestCommitKey.marshal());
-	            	latestIndexedRevisionTbl.put(repository.getId(), latestCommitKey);
 	            }
 	        } finally {
 	        	searcher.close();
@@ -614,7 +634,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
         	throw new IndexException("IO error while reading from index for repository: " + repository.getId(), ioe);
         }
 
-        return latestCommitKey;
+        return commitKeySet;
     }
     
     /**
@@ -654,17 +674,5 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     	
         final String logMessageUpperCase = StringUtils.upperCase(logEntry.getMessage());
         return JiraKeyUtils.isKeyInString(logMessageUpperCase);
-    }
-
-    /**
-     * Gets the last commit key from the memory map.
-     * 
-     * @param repositoryId the repository identifier. Must not be {@code null}
-     * @return the commit key. Will return {@code null} if there are no commit keys stored
-     */
-    private GitCommitKey getLatestCommitKey(final Object repositoryId) {
-    	assert repositoryId != null : "repositoryId must not be null";
-    	
-        return latestIndexedRevisionTbl.get(repositoryId);
     }
 }

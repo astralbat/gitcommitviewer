@@ -6,11 +6,15 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
+import jiracommitviewer.domain.AbstractPathCommitFile;
 import jiracommitviewer.domain.AddedCommitFile;
+import jiracommitviewer.domain.Commit;
 import jiracommitviewer.domain.CommitFile;
 import jiracommitviewer.domain.CopiedCommitFile;
 import jiracommitviewer.domain.DeletedCommitFile;
@@ -23,11 +27,19 @@ import jiracommitviewer.repository.exception.RepositoryException;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.Validate;
+import org.eclipse.jgit.api.AddCommand;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.RmCommand;
 import org.eclipse.jgit.api.TransportConfigCallback;
+import org.eclipse.jgit.api.errors.ConcurrentRefUpdateException;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
+import org.eclipse.jgit.api.errors.NoFilepatternException;
+import org.eclipse.jgit.api.errors.NoHeadException;
+import org.eclipse.jgit.api.errors.NoMessageException;
 import org.eclipse.jgit.api.errors.TransportException;
+import org.eclipse.jgit.api.errors.UnmergedPathsException;
+import org.eclipse.jgit.api.errors.WrongRepositoryStateException;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.diff.RawTextComparator;
@@ -40,9 +52,9 @@ import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
-import org.eclipse.jgit.revwalk.filter.CommitTimeRevFilter;
 import org.eclipse.jgit.revwalk.filter.RevFilter;
 import org.eclipse.jgit.transport.Connection;
+import org.eclipse.jgit.transport.FetchResult;
 import org.eclipse.jgit.transport.JschConfigSessionFactory;
 import org.eclipse.jgit.transport.OpenSshConfig.Host;
 import org.eclipse.jgit.transport.RemoteConfig;
@@ -175,6 +187,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 		} catch (final URISyntaxException urise) {
 			throw new RepositoryException("URI syntax exception, please check that the syntax is correct", urise);
 		}
+		logger.debug("Remote repository is not yet cloned: " + repository.getUri());
 		return false;
     }
 	
@@ -185,9 +198,11 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	public synchronized void fetch(final GitRepository repository) throws RepositoryException {
 		Validate.notNull(repository, "repository must not be null");
 		
+		logger.debug("Fetching from remote repository: " + repository.getUri());
+		
 		final FileRepository fileRepository = getFileRepository(repository);
 		try {
-			Git.wrap(fileRepository)
+			final FetchResult result = Git.wrap(fileRepository)
 				.fetch()
 				.setTransportConfigCallback(new TransportConfigCallback() {
 					@Override
@@ -196,6 +211,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 					}
 				})
 				.call();
+			logger.debug(result.getMessages());
 		} catch (final InvalidRemoteException e) {
 			throw new RuntimeException(e);
 		} catch (final TransportException e) {
@@ -209,8 +225,8 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	 * {@inheritDoc}
 	 */
 	@Override
-	public synchronized LogEntryEnumerator<GitRepository, GitCommitKey> getLogEntries(final GitRepository repository, final GitCommitKey commitKey) 
-			throws RepositoryException {
+	public synchronized LogEntryEnumerator<GitRepository, GitCommitKey> getLogEntries(final GitRepository repository, 
+			final Set<GitCommitKey> commitKeys) throws RepositoryException {
 		Validate.notNull(repository, "repository must not be null");
 		
 		final FileRepository fileRepository = getFileRepository(repository);
@@ -230,7 +246,15 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 			private int walkRefreshInterval = WALK_REFRESH_INTERVAL;
 			
 			{
-				walk = createRevWalker(fileRepository, (GitCommitKey)commitKey);
+				if (commitKeys != null) {
+					final Set<ObjectId> objectIds = new HashSet<ObjectId>();
+					for (final GitCommitKey commitKey : commitKeys) {
+						objectIds.add(ObjectId.fromString(commitKey.getCommitHash()));
+					}
+					walk = createRevWalker(fileRepository, objectIds);
+				} else {
+					walk = createRevWalker(fileRepository, null);
+				}
 			}
 			
 			@Override
@@ -290,7 +314,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 					if (--walkRefreshInterval == 0) {
 						walkRefreshInterval = WALK_REFRESH_INTERVAL;
 						walk.dispose();
-						walk = createRevWalker(fileRepository, new GitCommitKey(lastCommit.getId().getName(), lastCommit.getCommitTime()));
+						walk = createRevWalker(fileRepository, branchTracker.keySet());
 					}
 					isNextConsumed = false;
 				} catch (final MissingObjectException e) {
@@ -341,6 +365,112 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 					" and commit key: " + commitKey.marshal() + ". The object identified by commitKey doesn't appear to be a commit", e1);
 		} catch (final IOException e1) {
 			throw new RepositoryException("Repository access IO error for repository: " + repository.getId(), e1);
+		}
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void create(final GitRepository repository) {
+		Validate.notNull(repository, "repository must not be null");
+		
+		URIish uri;
+		try {
+			uri = new URIish(repository.getUri());
+			if (!"file".equals(uri.getScheme())) {
+				throw new IllegalArgumentException("Only file URI scheme is supported for creating new repositories");
+			}
+		} catch (final URISyntaxException e) {
+			throw new IllegalArgumentException("URI syntax exception", e);
+		}
+		
+		try {
+			Git.init().setBare(false).setDirectory(new File(uri.getPath())).call();
+		} catch (final GitAPIException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public synchronized void commit(final GitRepository repository, final Commit<GitRepository> commit) throws RepositoryException {
+		Validate.notNull(repository, "repository must not be null");
+		Validate.notNull(commit, "commit must not be null");
+		
+		FileRepository fileRepository;
+		try {
+			final URIish uri = new URIish(repository.getUri());
+			if (!"file".equals(uri.getScheme())) {
+				throw new IllegalArgumentException("Only file:// URI scheme supported");
+			}
+			fileRepository = new FileRepository(uri.getPath());
+			if (!fileRepository.getObjectDatabase().exists()) {
+				fileRepository = (FileRepository)Git.init().setBare(false).setDirectory(new File(uri.getPath())).call()
+						.getRepository();
+			}
+		} catch (final IOException ioe) {
+			throw new RepositoryException("Cannot access the repository: " + ioe.getMessage(), ioe);
+		} catch (final URISyntaxException urise) {
+			throw new RepositoryException("Malformed URI: " + urise.getMessage(), urise);
+		} catch (final GitAPIException gitapie) {
+			throw new RuntimeException(gitapie);
+		}
+		
+		final AddCommand addCommand = Git.wrap(fileRepository).add();
+		final RmCommand rmCommand = Git.wrap(fileRepository).rm();
+		boolean haveAdditions = false, haveRemovals = false;
+		for (final CommitFile commitFile : commit.getCommitFiles()) {
+			if (commitFile instanceof AddedCommitFile || commitFile instanceof ModifiedCommitFile) {
+				logger.debug("Adding file " + ((AbstractPathCommitFile)commitFile).getPath());
+				addCommand.addFilepattern(((AbstractPathCommitFile)commitFile).getPath());
+				haveAdditions = true;
+			} else if (commitFile instanceof DeletedCommitFile) {
+				logger.debug("Removing file " + ((DeletedCommitFile)commitFile).getPath());
+				rmCommand.addFilepattern(((DeletedCommitFile)commitFile).getPath());
+				haveRemovals = true;
+			}
+		}
+		
+		try {
+			try {
+				if (haveAdditions) {
+					addCommand.call();
+				}
+				if (haveRemovals) {
+					rmCommand.call();
+				}
+			} catch (final NoFilepatternException e) {
+				// Don't expect this state to be ever possible
+				throw new RuntimeException(e);
+			}
+			
+			try {
+				final RevCommit revCommit = Git.wrap(fileRepository)
+					.commit()
+					.setMessage(commit.getMessage())
+					.setAuthor(commit.getAuthorName(), commit.getAuthorName())
+					.call();
+				logger.debug("All files committed; head is at " + revCommit.getName());
+			} catch (final NoHeadException e) {
+				// Don't expect this state to be ever possible
+				throw new RuntimeException(e);
+			} catch (final NoMessageException e) {
+				throw new IllegalArgumentException("No message. Check that a commit message has been supplied", e);
+			} catch (UnmergedPathsException e) {
+				// Don't expect this state to be ever possible
+				throw new RuntimeException(e);
+			} catch (final ConcurrentRefUpdateException e) {
+				// Don't expect this state to be ever possible
+				throw new RuntimeException(e);
+			} catch (final WrongRepositoryStateException e) {
+				// Don't expect this state to be ever possible
+				throw new RuntimeException(e);
+			}
+		} catch (final GitAPIException e) {
+			throw new RuntimeException(e);
 		}
 	}
 	
@@ -410,7 +540,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	/**
 	 * Creates a new repository walker that walks all branches on the supplied {@code fileRepository}.
 	 * <p>
-	 * Commits are walked backwards in time starting from the leaves (the most recent commits). By providing a {@code commitKey}
+	 * Commits are walked backwards in time starting from the leaves (the most recent commits). By providing a {@code commitKeyMap}
 	 * the later commits can be skipped by starting the search at the {@code commitKey}'s time and retrieving all commits
 	 * before it. The first commit walked by the returned walker will be directly after the {@code commitKey}'s.
 	 * <p>
@@ -421,12 +551,13 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	 * filling up. This is done by calling {@link RevWalk#dispose()}.
 	 * 
 	 * @param fileRepository the git repository to walk. Must not be {@code nul}
-	 * @param commitKey the key whose time will be used to offset the walking. If {@code null} then all commits will be walked
-	 * from all branch leafs
+	 * @param commitKeys the keys whose identity will be used to exclude these commmits and their parents. If {@code null} then all 
+	 * commits will be walked from all branch leafs
 	 * @return the revision walker instance. Never {@code null}
 	 * @throws RepositoryException if an error occurs while reading the repository
 	 */
-	private RevWalk createRevWalker(final FileRepository fileRepository, final GitCommitKey commitKey) throws RepositoryException {
+	private RevWalk createRevWalker(final FileRepository fileRepository, final Set<ObjectId> commitKeys) 
+			throws RepositoryException {
 		assert fileRepository != null : "fileRepository must not be null";
 		
 		try {
@@ -438,15 +569,14 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 				walk.markStart(walk.parseCommit(branch.getObjectId()));
 			}
 			
-			// Create a revision filter to filter out all commits after or equal in time to the commitKey specified.
+			// Create a revision filter to filter out all commits equal or being a parent of any of the commitKeys specified.
 			// We must also update the branchTracker as we progress.
-			if (commitKey != null) {
-				final RevFilter commitTimeFilter = CommitTimeRevFilter.before((long)commitKey.getCommitTime() * 1000);
-				walk.setRevFilter(new RevFilter() {
+			if (commitKeys != null) {
+				walk.setRevFilter(new NewCommitsRevisionFilter(commitKeys) {
 					@Override
 					public boolean include(final RevWalk walker, final RevCommit cmit) throws StopWalkException, MissingObjectException,
 							IncorrectObjectTypeException, IOException {
-						final boolean include = commitTimeFilter.include(walker, cmit);
+						final boolean include = super.include(walker, cmit);
 						if (!include) {
 							updateBranchTracker(cmit);
 						}
@@ -454,24 +584,9 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 					}
 					@Override
 					public RevFilter clone() {
-						return commitTimeFilter.clone();
+						return super.clone();
 					}
 				});
-			}
-			
-			// Walk past commitKey's commit which will be within the next few nexts() as the before filter
-			// includes time equal to our commitKey's commit and thus this commit will always be filtered in.
-			if (commitKey != null) {
-				RevCommit commit;
-				while ((commit = walk.next()).getCommitTime() == commitKey.getCommitTime()) {
-					updateBranchTracker(commit);
-					if (commit.getId().getName().equals(commitKey.getCommitHash())) {
-						return walk;
-					}
-				}
-				// Assume history has been changed.
-				throw new RepositoryException("Cannot create a revision walker starting at the specified commit: " + 
-						commitKey.marshal() + ". The commit for the given commit key does not exist");
 			}
 			
 			return walk;
@@ -498,8 +613,12 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 			throw new IllegalStateException("No branch name found for commit: " + commit.getName());
 		}
 		branchTracker.remove(commit);
-		if (commit.getParentCount() > 0) {
-			branchTracker.put(commit.getParent(0), branchName);
+		
+		final RevCommit[] parents = commit.getParents();
+		for (int i = 0; i < parents.length; i++) {
+			if (i == 0 || !branchTracker.containsKey(parents[i])) {
+				branchTracker.put(parents[i], branchName);
+			}
 		}
 		return branchName;
 	}
@@ -574,6 +693,60 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
     	// Configure private key for SSH
     	if (transport instanceof SshTransport) {
 			((SshTransport)transport).setSshSessionFactory(getSshSessionFactory(repository));
+		}
+    }
+    
+    /**
+     * A revision filter that maintains a stateful collection of SHA-1 'stops'. Whenever a commit is reached with a SHA-1 sum
+     * equal to any stop, it and all its parents will never be included. This essentially forces only 'new' commits to ever be
+     * included.
+     * <p>
+     * Because of its statefulness, instances cannot be used between multiple instances of {@link RevWalk}s.
+     * 
+     * @author mark
+     */
+    private class NewCommitsRevisionFilter extends RevFilter {
+    	
+		private final Set<ObjectId> sha1Stops;
+		
+		/**
+		 * Initialises a new revision filter with the specified stops.
+		 * 
+		 * @param sha1Stops the stops to initialise with. Must not be {@code null}
+		 */
+		public NewCommitsRevisionFilter(final Set<ObjectId> sha1Stops) {
+			Validate.notNull(sha1Stops, "sha1Stops must not be null");
+			
+			this.sha1Stops = sha1Stops;
+		}
+		
+		/**
+		 * {@inheritDoc}
+		 */
+		@Override
+		public boolean include(final RevWalk walker, final RevCommit cmit) throws StopWalkException, MissingObjectException,
+				IncorrectObjectTypeException, IOException {
+			boolean include = true;
+			
+			if (sha1Stops.contains(cmit.getId().getName())) {
+				sha1Stops.remove(cmit.getId().getName());
+				for (final RevCommit parent : cmit.getParents()) {
+					sha1Stops.add(parent.getId());
+				}
+				include = false;
+			}
+			if (!include) {
+				updateBranchTracker(cmit);
+			}
+			return include;
+		}
+		
+		/**
+		 * {@inheritDoc}
+		 */
+		@Override
+		public RevFilter clone() {
+			return new NewCommitsRevisionFilter(new HashSet<ObjectId>(sha1Stops));
 		}
     }
 }

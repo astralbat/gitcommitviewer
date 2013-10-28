@@ -42,8 +42,7 @@ public interface CommitIndexer<R extends AbstractRepository, K extends AbstractC
     public static final int MAX_COMMITS = 500;
 	
 	/**
-	 * Notifies the indexer that a repository has been deleted and that all indexes for it should
-	 * be removed.
+	 * Notifies the indexer that all indexes for a repository must be removed.
 	 * 
 	 * @param repository the repository. Must not be {@code null}
 	 * @throws IOException if an error occurs whilst removing

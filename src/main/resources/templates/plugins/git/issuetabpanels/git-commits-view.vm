@@ -13,7 +13,7 @@
     	<td bgcolor="#ffffff" width="10%" valign="top" rowspan="3">#if ($textutils.htmlEncode($git.logEntry.branch)) $textutils.htmlEncode($git.logEntry.branch) #else $i18n.getText("git.issue-tab.unknown") #end</td>
     	<td bgcolor="#ffffff" width="8%" valign="top" rowspan="3">$git.linkRenderer.getChangesetLink($git.logEntry)</td>
     	<td bgcolor="#ffffff" width="14%" valign="top" rowspan="3">$!git.logEntry.date</td>
-    	<td bgcolor="#ffffff" width="11%" valign="top" rowspan="3">$textutils.htmlEncode($stringUtils.defaultString($git.logEntry.author))</td>
+    	<td bgcolor="#ffffff" width="11%" valign="top" rowspan="3">$textutils.htmlEncode($stringUtils.defaultString($git.logEntry.authorName))</td>
     	<td bgcolor="#ffffff">#makelinkedhtml($git.logEntry.getMessage().trim())</td>
 	</tr>
 	<tr>
@@ -21,7 +21,7 @@
 	</tr>
 	<tr>
     	<td bgcolor="#ffffff">
-        	#foreach ($committedFile in $git.logEntry.committedFiles)
+        	#foreach ($committedFile in $git.logEntry.commitFiles)
             	#if ($git.isDeleted($committedFile) == true)
                 	<font color="#990000" size="-2"><b title="Delete">$i18n.getText("git.issue-tab.deleted")</b></font>
                 	$git.linkRenderer.getFileDeletedLink($git.logEntry, $committedFile)

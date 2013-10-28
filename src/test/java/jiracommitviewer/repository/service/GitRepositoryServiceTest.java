@@ -107,15 +107,19 @@ public class GitRepositoryServiceTest {
 		gitRepositoryService.cloneRepository(repository);
 		gitRepositoryService.fetch(repository);
 		
-		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, 
-				new GitCommitKey("7bf726cd31e2194fadf211ffb16e66328932b9a7", 
-				getGitDateFromString("Mon Sep 9 20:33:21 2013 +0100")));
-		Assert.assertTrue(enumerator.hasNext());
+		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, null);
+		LogEntry<GitRepository, GitCommitKey> logEntry = null;
+		while (enumerator.hasNext()) {
+			logEntry = enumerator.next();
+			if (logEntry.getCommitKey().getCommitHash().equals("c66feec2fc0ad9887949c04839232e17b440c690")) {
+				break;
+			}
+		}
 		
-		LogEntry<GitRepository, GitCommitKey> logEntry = enumerator.next();
+		Assert.assertNotNull("No log entries", logEntry);
 		Assert.assertEquals(repository, logEntry.getRepository());
 		Assert.assertEquals("firstbranch", logEntry.getBranch());
-		Assert.assertEquals("Mark Barrett", logEntry.getAuthor());
+		Assert.assertEquals("Mark Barrett", logEntry.getAuthorName());
 		Assert.assertEquals("GCV-1 Added a file", logEntry.getMessage().trim());
 		Assert.assertEquals("c66feec2fc0ad9887949c04839232e17b440c690", ((GitCommitKey)logEntry.getCommitKey()).getCommitHash());
 		Assert.assertEquals(getGitDateFromString("Mon Sep 9 20:16:53 2013 +0100"), ((GitCommitKey)logEntry.getCommitKey()).getCommitTime());
@@ -140,13 +144,17 @@ public class GitRepositoryServiceTest {
 		gitRepositoryService.cloneRepository(repository);
 		gitRepositoryService.fetch(repository);
 		
-		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, 
-				new GitCommitKey("7bf726cd31e2194fadf211ffb16e66328932b9a7", 
-				getGitDateFromString("Mon Sep 9 20:33:21 2013 +0100")));
-		Assert.assertTrue(enumerator.hasNext());
+		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, null);
+		LogEntry<GitRepository, GitCommitKey> logEntry = null;
+		while (enumerator.hasNext()) {
+			logEntry = enumerator.next();
+			if (logEntry.getCommitKey().getCommitHash().equals("c66feec2fc0ad9887949c04839232e17b440c690")) {
+				break;
+			}
+		}
 		
-		LogEntry<GitRepository, GitCommitKey> logEntry = enumerator.next();
-		List<CommitFile> committedFiles = logEntry.getCommittedFiles();
+		Assert.assertNotNull("No log entries", logEntry);
+		List<CommitFile> committedFiles = logEntry.getCommitFiles();
 		Assert.assertEquals(1, committedFiles.size());
 		Assert.assertTrue(committedFiles.get(0) instanceof AddedCommitFile);
 		Assert.assertEquals("file1.txt", ((AddedCommitFile)committedFiles.get(0)).getPath());
@@ -170,13 +178,17 @@ public class GitRepositoryServiceTest {
 		gitRepositoryService.cloneRepository(repository);
 		gitRepositoryService.fetch(repository);
 		
-		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, 
-				new GitCommitKey("1d255e4add5a2954ce2f7dd8959d0496382a3357", 
-				getGitDateFromString("Mon Sep 9 20:34:40 2013 +0100")));
-		Assert.assertTrue(enumerator.hasNext());
+		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, null);
+		LogEntry<GitRepository, GitCommitKey> logEntry = null;
+		while (enumerator.hasNext()) {
+			logEntry = enumerator.next();
+			if (logEntry.getCommitKey().getCommitHash().equals("7bf726cd31e2194fadf211ffb16e66328932b9a7")) {
+				break;
+			}
+		}
 		
-		LogEntry<GitRepository, GitCommitKey> logEntry = enumerator.next();
-		List<CommitFile> committedFiles = logEntry.getCommittedFiles();
+		Assert.assertNotNull("No log entries", logEntry);
+		List<CommitFile> committedFiles = logEntry.getCommitFiles();
 		Assert.assertEquals(1, committedFiles.size());
 		Assert.assertTrue(committedFiles.get(0) instanceof RenamedCommitFile);
 		Assert.assertEquals("file1.txt", ((RenamedCommitFile)committedFiles.get(0)).getFromPath());
@@ -201,13 +213,17 @@ public class GitRepositoryServiceTest {
 		gitRepositoryService.cloneRepository(repository);
 		gitRepositoryService.fetch(repository);
 		
-		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, 
-				new GitCommitKey("bf817175eeb8ac21985bca39e95598f7e879f6f2", 
-				getGitDateFromString("Mon Sep 9 20:35:30 2013 +0100")));
-		Assert.assertTrue(enumerator.hasNext());
+		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, null);
+		LogEntry<GitRepository, GitCommitKey> logEntry = null;
+		while (enumerator.hasNext()) {
+			logEntry = enumerator.next();
+			if (logEntry.getCommitKey().getCommitHash().equals("1d255e4add5a2954ce2f7dd8959d0496382a3357")) {
+				break;
+			}
+		}
 		
-		LogEntry<GitRepository, GitCommitKey> logEntry = enumerator.next();
-		List<CommitFile> committedFiles = logEntry.getCommittedFiles();
+		Assert.assertNotNull("No log entries", logEntry);
+		List<CommitFile> committedFiles = logEntry.getCommitFiles();
 		Assert.assertEquals(1, committedFiles.size());
 		Assert.assertTrue(committedFiles.get(0) instanceof ModifiedCommitFile);
 		Assert.assertEquals("file2.txt", ((ModifiedCommitFile)committedFiles.get(0)).getPath());
@@ -231,13 +247,17 @@ public class GitRepositoryServiceTest {
 		gitRepositoryService.cloneRepository(repository);
 		gitRepositoryService.fetch(repository);
 		
-		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, 
-				new GitCommitKey("5588f1c9292b9c5e9ef553620098e48cf8d165e4", 
-				getGitDateFromString("Mon Sep 9 20:39:10 2013 +0100")));
-		Assert.assertTrue(enumerator.hasNext());
+		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, null);
+		LogEntry<GitRepository, GitCommitKey> logEntry = null;
+		while (enumerator.hasNext()) {
+			logEntry = enumerator.next();
+			if (logEntry.getCommitKey().getCommitHash().equals("bf817175eeb8ac21985bca39e95598f7e879f6f2")) {
+				break;
+			}
+		}
 		
-		LogEntry<GitRepository, GitCommitKey> logEntry = enumerator.next();
-		List<CommitFile> committedFiles = logEntry.getCommittedFiles();
+		Assert.assertNotNull("No log entries", logEntry);
+		List<CommitFile> committedFiles = logEntry.getCommitFiles();
 		Assert.assertEquals(1, committedFiles.size());
 		Assert.assertTrue(committedFiles.get(0) instanceof DeletedCommitFile);
 		Assert.assertEquals("file2.txt", ((DeletedCommitFile)committedFiles.get(0)).getPath());
@@ -261,13 +281,17 @@ public class GitRepositoryServiceTest {
 		gitRepositoryService.cloneRepository(repository);
 		gitRepositoryService.fetch(repository);
 		
-		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, 
-				new GitCommitKey("153e661a733fc8d1dbd0ec5b6c14c572c1bef8ae", 
-				getGitDateFromString("Mon Sep 9 20:54:20 2013 +0100")));
-		Assert.assertTrue(enumerator.hasNext());
+		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, null);
+		LogEntry<GitRepository, GitCommitKey> logEntry = null;
+		while (enumerator.hasNext()) {
+			logEntry = enumerator.next();
+			if (logEntry.getCommitKey().getCommitHash().equals("970d660290bc24299fa8997f298bd02a310776d3")) {
+				break;
+			}
+		}
 		
-		LogEntry<GitRepository, GitCommitKey> logEntry = enumerator.next();
-		List<CommitFile> committedFiles = logEntry.getCommittedFiles();
+		Assert.assertNotNull("No log entries", logEntry);
+		List<CommitFile> committedFiles = logEntry.getCommitFiles();
 		Assert.assertEquals(2, committedFiles.size());
 		Assert.assertTrue(committedFiles.get(0) instanceof AddedCommitFile);
 		Assert.assertTrue(committedFiles.get(1) instanceof AddedCommitFile);
@@ -293,14 +317,18 @@ public class GitRepositoryServiceTest {
 		gitRepositoryService.cloneRepository(repository);
 		gitRepositoryService.fetch(repository);
 		
-		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, 
-				new GitCommitKey("c1c33efe62aeeb02aa568e9075577f61c48a5568", 
-				getGitDateFromString("Wed Sep 18 19:55:02 2013 +0100")));
-		Assert.assertTrue(enumerator.hasNext());
+		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, null);
+		LogEntry<GitRepository, GitCommitKey> logEntry = null;
+		while (enumerator.hasNext()) {
+			logEntry = enumerator.next();
+			if (logEntry.getCommitKey().getCommitHash().equals("095014f90aac621901d29e1e3986ad5f9e52361a")) {
+				break;
+			}
+		}
 		
-		LogEntry<GitRepository, GitCommitKey> logEntry = enumerator.next();
+		Assert.assertNotNull("No log entries", logEntry);
 		Assert.assertEquals("firstbranch", logEntry.getBranch());
-		List<CommitFile> committedFiles = logEntry.getCommittedFiles();
+		List<CommitFile> committedFiles = logEntry.getCommitFiles();
 		Assert.assertEquals(1, committedFiles.size());
 		Assert.assertTrue(committedFiles.get(0) instanceof AddedCommitFile);
 	}
