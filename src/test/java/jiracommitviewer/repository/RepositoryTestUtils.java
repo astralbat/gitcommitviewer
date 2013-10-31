@@ -55,13 +55,25 @@ public class RepositoryTestUtils {
 		Validate.notNull(path, "path must not be null");
 		Validate.notNull(content, "content must not be null");
 		
+		final File newFile = new File(getRepositoryBase(gitRepository).getPath() + File.separator + path.getPath());
+		FileUtils.writeByteArrayToFile(newFile, content);
+	}
+	
+	/**
+	 * Gets the base directory of the specified reposotory's file location.
+	 * 
+	 * @param gitRepository the repository. Must not be {@code null}
+	 * @return the base file. Never {@code null}
+	 * @throws URISyntaxException
+	 */
+	public static File getRepositoryBase(final GitRepository gitRepository) throws URISyntaxException {
+		Validate.notNull(gitRepository, "gitRepository must not be null");
+		
 		final URIish uri = new URIish(gitRepository.getUri());
 		if (!"file".equals(uri.getScheme())) {
 			throw new IllegalArgumentException("Only file:// URI scheme supported");
 		}
 		final File repositoryDirectory = new File(uri.getPath());
-		final File newFile = new File(repositoryDirectory.getPath() + File.separator + path.getPath());
-		
-		FileUtils.writeByteArrayToFile(newFile, content);
+		return repositoryDirectory;
 	}
 }

@@ -16,6 +16,8 @@ import jiracommitviewer.domain.GitCommitKey;
 import jiracommitviewer.domain.GitRepository;
 import jiracommitviewer.index.CommitIndexer;
 import jiracommitviewer.index.exception.IndexException;
+import jiracommitviewer.repository.exception.RepositoryException;
+import jiracommitviewer.repository.service.RepositoryServiceHelper;
 
 import org.apache.commons.lang3.Validate;
 import org.slf4j.Logger;
@@ -47,6 +49,8 @@ public class DefaultRepositoryManager implements RepositoryManager {
 
     @Autowired
     private CommitIndexer<GitRepository, GitCommitKey> gitRevisionIndexer;
+    @Autowired
+    private RepositoryServiceHelper repositoryServiceHelper;
 
     private final Map<Object, AbstractRepository> repositories = new HashMap<Object, AbstractRepository>();
     private final PluginSettingsFactory pluginSettingsFactory;
@@ -198,6 +202,12 @@ public class DefaultRepositoryManager implements RepositoryManager {
 			}
 		} catch (final IndexException ie) {
 			log.error("Failed to remove entries from index for repository: " + id, ie);
+		}
+		
+		try {
+			repositoryServiceHelper.getRepositoryService(repository).remove(repository);
+		} catch (final RepositoryException re) {
+			log.error("Failed to remove persistent repository information: " + id, re);
 		}
     }
 

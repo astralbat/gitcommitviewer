@@ -132,6 +132,20 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 			throw new RepositoryException("Failed to activate repository: " + repository.getDisplayName() + ": " + e.getMessage(), e);
 		}
 	}
+	
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void remove(final GitRepository repository) throws RepositoryException {
+		Validate.notNull(repository, "repository must not be null");
+		
+		try {
+			FileUtils.deleteDirectory(getRepositoryPath(repository.getId()));
+		} catch (final IOException ioe) {
+			throw new RepositoryException("Cannot delete repository clone: " + ioe.getMessage(), ioe);
+		}
+	}
 
 	/**
 	 * {@inheritDoc}

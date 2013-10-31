@@ -61,4 +61,11 @@ public interface RepositoryService<R extends AbstractRepository, K extends Abstr
 	 * if there is an error while accessing the repository
 	 */
 	LogEntry<R, K> getLogEntry(R repository, K commitKey) throws RepositoryException;
+	
+	/**
+	 * Removes any persistent information held by this service on the specified {@code repository}.
+	 * 
+	 * @param repository the repository to remove information for. Must not be {@code null}
+	 */
+	void remove(R repository) throws RepositoryException;
 }
