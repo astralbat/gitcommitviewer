@@ -3,6 +3,7 @@ package jiracommitviewer.index;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -80,7 +81,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     @Autowired
     private IndexPathManager indexPathManager;
     
-    private final Hashtable<Object, Map<String, GitCommitKey>> branchIndexedCommitTbl = new Hashtable<Object, Map<String, GitCommitKey>>();
+    private final Hashtable<Object, Map<List<String>, GitCommitKey>> branchIndexedCommitTbl = new Hashtable<Object, Map<List<String>, GitCommitKey>>();
     private final Hashtable<Object, Set<GitCommitKey>> frequentIndexedCommitTbl = new Hashtable<Object, Set<GitCommitKey>>();
     private int frequentIndexedCount = 0;
     private LuceneIndexAccessor indexAccessor;
@@ -102,7 +103,10 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     	
     	gitRepositoryService.cloneRepository(repository);
     	gitRepositoryService.fetch(repository);
-    	createIndexIfNeeded();
+    	if (createIndexIfNeeded()) {
+    		branchIndexedCommitTbl.clear();
+        	frequentIndexedCommitTbl.clear();
+    	}
     	updateIndex(repository);
     }
     
@@ -162,8 +166,8 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	                	try {
 	                		final LogEntry<GitRepository, GitCommitKey> logEntry = gitRepositoryService
 	                				.getLogEntry((GitRepository)repository, commitKey);
-	                		if (logEntry.getBranch() == null) {
-	                			logEntry.setBranch(doc.get(FIELD_BRANCH));
+	                		if (logEntry.getBranches() == null) {
+	                			logEntry.setBranches(Arrays.asList(doc.getValues(FIELD_BRANCH)));
 	                		}
 	                		logEntries.add(logEntry);
 	                	} catch (final RepositoryException re) {
@@ -233,8 +237,8 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	                	try {
 	                		final LogEntry<GitRepository, GitCommitKey> logEntry = gitRepositoryService
 	                				.getLogEntry((GitRepository)repository, commitKey);
-	                		if (logEntry.getBranch() == null) {
-	                			logEntry.setBranch(doc.get(FIELD_BRANCH));
+	                		if (logEntry.getBranches() == null) {
+	                			logEntry.setBranches(Arrays.asList(doc.getValues(FIELD_BRANCH)));
 	                		}
 	                		logEntries.add(logEntry);
 	                	} catch (final RepositoryException re) {
@@ -327,8 +331,8 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	                	try {
 	                		final LogEntry<GitRepository, GitCommitKey> logEntry = gitRepositoryService
 	                				.getLogEntry((GitRepository)repository, commitKey);
-	                		if (logEntry.getBranch() == null) {
-	                			logEntry.setBranch(doc.get(FIELD_BRANCH));
+	                		if (logEntry.getBranches() == null) {
+	                			logEntry.setBranches(Arrays.asList(doc.getValues(FIELD_BRANCH)));
 	                		}
 	                		logEntries.add(logEntry);
 	                	} catch (final RepositoryException re) {
@@ -411,8 +415,8 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
         // Operate on clones of the global state. This way we shall 'commit' them to the global state only if we
         // are successful. If we don't do this, failures will cause earlier parts of the graph to remain unindexed.
         @SuppressWarnings("unchecked")
-		final Hashtable<Object, Map<String, GitCommitKey>> branchIndexedCommitTbl = 
-        		(Hashtable<Object, Map<String, GitCommitKey>>)this.branchIndexedCommitTbl.clone();
+		final Hashtable<Object, Map<List<String>, GitCommitKey>> branchIndexedCommitTbl = 
+        		(Hashtable<Object, Map<List<String>, GitCommitKey>>)this.branchIndexedCommitTbl.clone();
         @SuppressWarnings("unchecked")
 		final Hashtable<Object, Set<GitCommitKey>> frequentIndexedCommitTbl = 
         		(Hashtable<Object, Set<GitCommitKey>>)this.frequentIndexedCommitTbl.clone();
@@ -421,7 +425,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
         try {
         	// Make sure latest/frequent hashes are initialised
             if (branchIndexedCommitTbl.get(repository.getId()) == null) {
-            	branchIndexedCommitTbl.put(repository.getId(), new HashMap<String, GitCommitKey>());
+            	branchIndexedCommitTbl.put(repository.getId(), new HashMap<List<String>, GitCommitKey>());
             	frequentIndexedCommitTbl.put(repository.getId(), updateFrequentIndexedCommitTable(repository));
             }
 
@@ -448,11 +452,11 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
                 				if (frequentIndexedCount++ % 100 == 0) {
                 					frequentIndexedCommitTbl.get(repository.getId()).add(logEntry.getCommitKey());
                 				}
-                				// Update the latest branch indexed. Branch should never be null while indexing
-                				if (branchIndexedCommitTbl.get(repository.getId()).get(logEntry.getBranch()) != null) {
+                				// Update the latest branches indexed. Branches should never be null while indexing
+                				if (branchIndexedCommitTbl.get(repository.getId()).get(logEntry.getBranches()) != null) {
                 					if (logEntry.getCommitKey().compareTo(branchIndexedCommitTbl.get(repository.getId())
-                							.get(logEntry.getBranch())) > 0) {
-                						branchIndexedCommitTbl.get(repository.getId()).put(logEntry.getBranch(), logEntry.getCommitKey());
+                							.get(logEntry.getBranches())) > 0) {
+                						branchIndexedCommitTbl.get(repository.getId()).put(logEntry.getBranches(), logEntry.getCommitKey());
                 					}
                 				}
                 			}
@@ -562,7 +566,9 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 
         doc.add(new Field(FIELD_REPOSITORY, String.valueOf(gitRepository.getId()), Field.Store.YES, Field.Index.NOT_ANALYZED));
         doc.add(new Field(FIELD_COMMITKEY, logEntry.getCommitKey().marshal(), Field.Store.YES, Field.Index.NOT_ANALYZED));
-        doc.add(new Field(FIELD_BRANCH, logEntry.getBranch(), Field.Store.YES, Field.Index.NOT_ANALYZED));
+        for (final String branch : logEntry.getBranches()) {
+        	doc.add(new Field(FIELD_BRANCH, branch, Field.Store.YES, Field.Index.NOT_ANALYZED));
+        }
 
         if (logEntry.getDate() != null) {
             doc.add(new Field(FIELD_DATE, DateTools.dateToString(logEntry.getDate(), Resolution.SECOND), Field.Store.YES, Field.Index.NOT_ANALYZED));

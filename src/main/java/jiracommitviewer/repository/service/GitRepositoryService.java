@@ -57,4 +57,42 @@ public interface GitRepositoryService extends RepositoryService<GitRepository, G
 	 * @throws RepositoryException if an error occurs whilst committing
 	 */
 	void commit(final GitRepository repository, final Commit<GitRepository> commit) throws RepositoryException;
+	
+	/**
+	 * Creates a branch on the {@code repository} from the checked out branch with the specified {@code branchName}
+	 * and switches to it.
+	 * 
+	 * @param repository the repository to create the branch on. Must not be {@code null}
+	 * @param branchName the name of the new branch. Must not be {@code null}
+	 * @throws RepositoryException if an error occurs whilst creating
+	 */
+	void branch(final GitRepository repository, final String branchName) throws RepositoryException;
+	
+	/**
+	 * Checks out {@code branchName} on {@code repository}.
+	 * 
+	 * @param repository the repository on which to checkout. Must not be {@code null}
+	 * @param branchName the name of the branch to checkout. Must not be {@code null}
+	 * @throws RepositoryException if an error occurs whilst checking out
+	 */
+	void checkout(final GitRepository repository, final String branchName) throws RepositoryException;
+	
+	/**
+	 * Deletes {@code branchName} on {@code repository}.
+	 *  
+	 * @param repository the repository on which to delete {@code branchName}. Must not be {@code null}
+	 * @param branchName the name of the branch to delete. Must not be {@code null}
+	 * @throws RepositoryException if an error occurs whilst deleting the branch
+	 */
+	void deleteBranch(final GitRepository repository, final String branchName) throws RepositoryException;
+	
+	/**
+	 * Merges changes from {@code branchName} on to the current branch in {@code repository}.
+	 * The merge makes the commit automatically.
+	 * 
+	 * @param repository the repository on which to merge. Must not be {@code null}
+	 * @param branchName the name of the branch to merge in. Must not be {@code null}
+	 * @throws RepositoryException if an error occurs whilst merging
+	 */
+	void merge(final GitRepository repository, final String branchName) throws RepositoryException;
 }

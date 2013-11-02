@@ -42,7 +42,7 @@ public class GitCommitAction extends AbstractIssueAction {
     public GitCommitAction(final LogEntry<GitRepository, GitCommitKey> logEntry, final IssueTabPanelModuleDescriptor descriptor) {
         super(descriptor);
         this.descriptor = descriptor;
-        this.logEntry = new LogEntry<GitRepository, GitCommitKey>(logEntry.getRepository(), logEntry.getBranch(), logEntry.getCommitKey(), 
+        this.logEntry = new LogEntry<GitRepository, GitCommitKey>(logEntry.getRepository(), logEntry.getBranches(), logEntry.getCommitKey(), 
         		logEntry.getParentCommitKey(), logEntry.getAuthorName(), logEntry.getDate(), rewriteLogMessage(logEntry.getMessage()), 
         		logEntry.getCommitFiles());
     }

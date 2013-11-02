@@ -44,7 +44,7 @@ public interface RepositoryService<R extends AbstractRepository, K extends Abstr
 	 * 
 	 * @param repository the repository. Must not be {@code null}
 	 * @param commitKeys the commit keys to exclude these commits and all their parents. When {@code null}, all log entries are 
-	 * returned from the beginning
+	 * returned from the end
 	 * @return an enumerator for reading log entries sequentially. Never {@code null}
 	 * @throws RepositoryException if {@code commitKey} is not {@code null} and the identified commit does not exist; or
 	 * if there is an error while accessing the repository

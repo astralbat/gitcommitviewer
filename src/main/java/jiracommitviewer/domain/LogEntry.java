@@ -19,7 +19,7 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	private K commitKey;
 	private K parentCommitKey;
 	private final Date date;
-	private String branch;
+	private List<String> branches;
 	
 	/**
 	 * Creates a new log entry.
@@ -33,7 +33,7 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	 * @param message the commit message. Must not be {@code null}
 	 * @param commitFiles the list of files commmitted during this commit. Must not be {@code null}
 	 */
-	public LogEntry(final R repository, final String branch, final K commitKey, final K parentCommitKey, final String authorName, 
+	public LogEntry(final R repository, final List<String> branches, final K commitKey, final K parentCommitKey, final String authorName, 
 			final Date date, final String message, final List<CommitFile> commitFiles) {
 		super(repository, authorName, message, commitFiles);
 		
@@ -41,7 +41,7 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 		
 		this.commitKey = commitKey;
 		this.parentCommitKey = parentCommitKey;
-		this.branch = branch;
+		this.branches = branches;
 		this.date = date;
 	}
 	
@@ -64,21 +64,21 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	}
 	
 	/**
-	 * Gets the branch this commit was made on.
+	 * Gets the branches this commit was made on.
 	 * 
-	 * @return the branch. Will be {@code null} if the branch was not specified or is unknown
+	 * @return the branches. Will be {@code null} if the branches was not specified or is unknown
 	 */
-	public String getBranch() {
-		return branch;
+	public List<String> getBranches() {
+		return branches;
 	}
 	
 	/**
-	 * Sets the branch this commit was made on.
+	 * Sets the branches this commit was made on.
 	 * 
-	 * @param branch the branch. May be {@code null} if the branch is not known
+	 * @param branches the branches. May be {@code null} if the branches is not known
 	 */
-	public void setBranch(final String branch) {
-		this.branch = branch;
+	public void setBranches(final List<String> branches) {
+		this.branches = branches;
 	}
 	
 	/**

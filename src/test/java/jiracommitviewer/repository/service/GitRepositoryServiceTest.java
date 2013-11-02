@@ -122,7 +122,8 @@ public class GitRepositoryServiceTest {
 		
 		Assert.assertNotNull("No log entries", logEntry);
 		Assert.assertEquals(repository, logEntry.getRepository());
-		Assert.assertEquals("firstbranch", logEntry.getBranch());
+		Assert.assertTrue(logEntry.getBranches().contains("firstbranch"));
+		Assert.assertTrue(logEntry.getBranches().contains("master"));
 		Assert.assertEquals("Mark Barrett", logEntry.getAuthorName());
 		Assert.assertEquals("GCV-1 Added a file", logEntry.getMessage().trim());
 		Assert.assertEquals("c66feec2fc0ad9887949c04839232e17b440c690", ((GitCommitKey)logEntry.getCommitKey()).getCommitHash());
@@ -375,10 +376,146 @@ public class GitRepositoryServiceTest {
 		}
 		
 		Assert.assertNotNull("No log entries", logEntry);
-		Assert.assertEquals("firstbranch", logEntry.getBranch());
+		Assert.assertEquals("firstbranch", logEntry.getBranches().get(0));
 		List<CommitFile> committedFiles = logEntry.getCommitFiles();
 		Assert.assertEquals(1, committedFiles.size());
 		Assert.assertTrue(committedFiles.get(0) instanceof AddedCommitFile);
+	}
+	
+	/**
+	 * A single branch has history of a merge. Check that we get log entries for all commits on both paths.
+	 * 
+	 * @throws IOException 
+	 * @throws URISyntaxException 
+	 * @throws RepositoryException 
+	 */
+	@Test
+	public void testGetLogEntriesOnBranchWithMerge() throws URISyntaxException, IOException, RepositoryException {
+		new NonStrictExpectations() {{
+			setField(gitRepositoryService, indexPathManager);
+			indexPathManager.getPluginIndexRootPath(); result = new File(ClassLoader.getSystemResource("indexes").toURI()).getPath();
+		}};
+		
+		// Create a repository and commit a file
+		final GitRepository repository = RepositoryTestUtils.getCreatedRepository(gitRepositoryService);
+		RepositoryTestUtils.createRepositoryFile(repository, new File("testfile"), "somecontent".getBytes());
+		gitRepositoryService.commit(repository, new Commit<GitRepository>(repository, "author", "message", 
+				new AddedCommitFile("testfile")));
+		
+		// Branch and add a new commit
+		gitRepositoryService.branch(repository, "newbranch");
+		RepositoryTestUtils.createRepositoryFile(repository, new File("branchfile"), "somecontent".getBytes());
+		gitRepositoryService.commit(repository, new Commit<GitRepository>(repository, "author", "message", 
+				new AddedCommitFile("branchfile")));
+		
+		// Checkout master and add a new commit
+		gitRepositoryService.checkout(repository, "master");
+		RepositoryTestUtils.createRepositoryFile(repository, new File("testfile2"), "somecontent".getBytes());
+		gitRepositoryService.commit(repository, new Commit<GitRepository>(repository, "author", "message", 
+				new AddedCommitFile("testfile2")));
+		
+		// Merge branch into master and delete new branch
+		gitRepositoryService.merge(repository, "newbranch");
+		gitRepositoryService.deleteBranch(repository, "newbranch");
+		
+		gitRepositoryService.cloneRepository(repository);
+		gitRepositoryService.fetch(repository);
+		
+		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, null);
+		// Merge commit
+		Assert.assertTrue(enumerator.hasNext());
+		LogEntry<GitRepository, GitCommitKey> logEntry = enumerator.next();
+		Assert.assertEquals("master", logEntry.getBranches().get(0));
+		// testfile2
+		Assert.assertTrue(enumerator.hasNext());
+		logEntry = enumerator.next();
+		Assert.assertEquals("testfile2", ((AddedCommitFile)logEntry.getCommitFiles().get(0)).getPath());
+		Assert.assertEquals("master", logEntry.getBranches().get(0));
+		// branchfile
+		Assert.assertTrue(enumerator.hasNext());
+		logEntry = enumerator.next();
+		Assert.assertEquals("branchfile", ((AddedCommitFile)logEntry.getCommitFiles().get(0)).getPath());
+		Assert.assertEquals("master", logEntry.getBranches().get(0));
+		// testfile
+		Assert.assertTrue(enumerator.hasNext());
+		logEntry = enumerator.next();
+		Assert.assertEquals("testfile", ((AddedCommitFile)logEntry.getCommitFiles().get(0)).getPath());
+		Assert.assertEquals("master", logEntry.getBranches().get(0));
+	}
+	
+	/**
+	 * A master and topic branch exist with the topic branch merged in to master. Expect that log entries
+	 * against each relevant branch have the correct 'branches' set and that the common ancestor has both
+	 * branches in 'branches'.
+	 * 
+	 * <pre>
+	 * C1 <-- C3 <-- C4   <--MASTER
+ 	 *    \         /
+	 *     -- C2 <--    <--NEWBRANCH
+	 * </pre>
+	 * 
+	 * @throws IOException 
+	 * @throws URISyntaxException 
+	 * @throws RepositoryException 
+	 */
+	@Test
+	public void testBranchNamesWhenMerged() throws URISyntaxException, IOException, RepositoryException {
+		new NonStrictExpectations() {{
+			setField(gitRepositoryService, indexPathManager);
+			indexPathManager.getPluginIndexRootPath(); result = new File(ClassLoader.getSystemResource("indexes").toURI()).getPath();
+		}};
+		
+		// Create a repository and commit a file - C1
+		final GitRepository repository = RepositoryTestUtils.getCreatedRepository(gitRepositoryService);
+		RepositoryTestUtils.createRepositoryFile(repository, new File("testfile"), "somecontent".getBytes());
+		gitRepositoryService.commit(repository, new Commit<GitRepository>(repository, "author", "message", 
+				new AddedCommitFile("testfile")));
+		
+		// Branch and add a new commit - C2
+		gitRepositoryService.branch(repository, "newbranch");
+		RepositoryTestUtils.createRepositoryFile(repository, new File("branchfile"), "somecontent".getBytes());
+		gitRepositoryService.commit(repository, new Commit<GitRepository>(repository, "author", "message", 
+				new AddedCommitFile("branchfile")));
+		
+		// Checkout master and add a new commit - C3
+		gitRepositoryService.checkout(repository, "master");
+		RepositoryTestUtils.createRepositoryFile(repository, new File("testfile2"), "somecontent".getBytes());
+		gitRepositoryService.commit(repository, new Commit<GitRepository>(repository, "author", "message", 
+				new AddedCommitFile("testfile2")));
+		
+		// Merge branch into master - C4
+		gitRepositoryService.merge(repository, "newbranch");
+		
+		gitRepositoryService.cloneRepository(repository);
+		gitRepositoryService.fetch(repository);
+		
+		LogEntryEnumerator<GitRepository, GitCommitKey> enumerator = gitRepositoryService.getLogEntries(repository, null);
+		// C4
+		Assert.assertTrue(enumerator.hasNext());
+		LogEntry<GitRepository, GitCommitKey> logEntry = enumerator.next();
+		Assert.assertTrue(logEntry.getBranches().contains("master"));
+		Assert.assertEquals(1, logEntry.getBranches().size());
+		// C2/C3
+		for (int i = 0; i < 2; i++) {
+			Assert.assertTrue(enumerator.hasNext());
+			logEntry = enumerator.next();
+			// C3
+			if ("testfile2".equals(((AddedCommitFile)logEntry.getCommitFiles().get(0)).getPath())) {
+				Assert.assertTrue(logEntry.getBranches().contains("master"));
+				Assert.assertEquals(1, logEntry.getBranches().size());
+			// C2
+			} else {
+				Assert.assertTrue(logEntry.getBranches().contains("master"));
+				Assert.assertTrue(logEntry.getBranches().contains("newbranch"));
+				Assert.assertEquals(2, logEntry.getBranches().size());
+			}
+		}
+		// C1
+		Assert.assertTrue(enumerator.hasNext());
+		logEntry = enumerator.next();
+		Assert.assertTrue(logEntry.getBranches().contains("master"));
+		Assert.assertTrue(logEntry.getBranches().contains("newbranch"));
+		Assert.assertEquals(2, logEntry.getBranches().size());
 	}
 	
 	/**

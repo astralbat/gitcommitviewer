@@ -84,47 +84,58 @@
 
                 <tr>
                     <td bgcolor="#f0f0f0" width="10%"><b>$i18n.getText("git.project-tab.repository")</b></td>
-                    <td bgcolor="#f0f0f0" width="10%"><b>$i18n.getText("git.project-tab.branch")</b></td>
+                    <td bgcolor="#f0f0f0" width="10%"><b>$i18n.getText("git.project-tab.branches")</b></td>
                     <td bgcolor="#f0f0f0" width="8%"><b>$i18n.getText("git.project-tab.commit")</b></td>
                     <td bgcolor="#f0f0f0" width="14%"><b>$i18n.getText("git.project-tab.date")</b></td>
                     <td bgcolor="#f0f0f0" width="11%"><b>$i18n.getText("git.project-tab.user")</b></td>
                     <td bgcolor="#f0f0f0"><b>$i18n.getText("git.project-tab.message")</b></td>
                 </tr>
                 <tr>
-                    <td bgcolor="#ffffff" width="10%" valign="top" rowspan="3">$textutils.htmlEncode($commit.repositoryDisplayName )</td>
-                    <td bgcolor="#ffffff" width="10%" valign="top" rowspan="3">#if ($textutils.htmlEncode($commit.logEntry.branch)) $textutils.htmlEncode($commit.logEntry.branch) #else $i18n.getText("git.project-tab.unknown") #end</td>
-                    <td bgcolor="#ffffff" width="8%" valign="top" rowspan="3">$commit.linkRenderer.getChangesetLink($commit.logEntry)</td>
-                    <td bgcolor="#ffffff" width="14%" valign="top" rowspan="3">$!commit.logEntry.date</td>
-                    <td bgcolor="#ffffff" width="11%" valign="top" rowspan="3">$textutils.htmlEncode($stringUtils.defaultString($commit.logEntry.authorName))</td>
-                    <td bgcolor="#ffffff">#makelinkedhtml($commit.logEntry.getMessage().trim())</td>
-                </tr>
-                <tr>
-                    <td bgcolor="#f0f0f0"><b>$i18n.getText("git.project-tab.files-changed")</b></td>
-                </tr>
-                <tr>
-                    <td bgcolor="#ffffff">
-                        #foreach ($committedFile in $commit.logEntry.commitFiles)
-                            #if ($commit.isDeleted($committedFile) == true)
-                                <font color="#990000" size="-2"><b title="Delete">$i18n.getText("git.project-tab.deleted")</b></font>
-                                $commit.linkRenderer.getFileDeletedLink($commit.logEntry, $committedFile)
-                            #elseif ($commit.isAdded($committedFile) == true)
-                                <font color="#009900" size="-2"><b title="Add">$i18n.getText("git.project-tab.added")</b></font>
-                                $commit.linkRenderer.getFileAddedLink($commit.logEntry, $committedFile)
-                            #elseif ($commit.isModified($committedFile) == true)
-                                <font color="#999933" size="-2"><b title="Modify">$i18n.getText("git.project-tab.modified")</b></font>
-                                $commit.linkRenderer.getFileModifiedLink($commit.logEntry, $committedFile)
-                            #elseif ($commit.isReplaced($committedFile) == true)
-                                <font color="#999933" size="-2"><b title="Replace">$i18n.getText("git.project-tab.replaced")</b></font>
-                                $commit.linkRenderer.getFileRenamedLink($commit.logEntry, $committedFile)
-                				(from $commit.linkRenderer.getFileReplacedLink($commit.logEntry, $committedFile))
-                            #elseif ($commit.isCopied($committedFile) == true)
-                				<font color="#999933" size="-2"><b title="Copy">$i18n.getText("git.project-tab.copied")</b></font>
-                				$commit.linkRenderer.getFileReplacedLink($commit.logEntry, $committedFile)
-                				(from $commit.linkRenderer.getFileCopiedLink($commit.logEntry, $committedFile))
-            				#end
-                            <br />
-                        #end
-                    </td>
+                    <td bgcolor="#ffffff" width="10%" valign="top">$textutils.htmlEncode($commit.repositoryDisplayName)</td>
+                    <td bgcolor="#ffffff" width="10%" valign="top">
+    					#foreach ($branch in $commit.logEntry.branches)
+    						#if ($velocityCount == 7)
+    							#set ($remainder = $commit.logEntry.branches.size() - 6)
+    							<strong>($remainder $i18n.getText("git.project-tab.more"))</strong>
+    							#break
+    						#end
+    						$textutils.htmlEncode($branch)
+    						<br/>
+    					#end
+    				</td>
+                    <td bgcolor="#ffffff" width="8%" valign="top">$commit.linkRenderer.getChangesetLink($commit.logEntry)</td>
+                    <td bgcolor="#ffffff" width="14%" valign="top">$!commit.logEntry.date</td>
+                    <td bgcolor="#ffffff" width="11%" valign="top">$textutils.htmlEncode($stringUtils.defaultString($commit.logEntry.authorName))</td>
+                    <td bgcolor="#ffffff" valign="top">#makelinkedhtml($commit.logEntry.getMessage().trim())
+                    
+                    	<div style="background-color: #f0f0f0">
+                    		<b>$i18n.getText("git.project-tab.files-changed")</b>
+                    	</div>
+                    
+                    	<div style="background-color: #ffffff">
+                        	#foreach ($committedFile in $commit.logEntry.commitFiles)
+                            	#if ($commit.isDeleted($committedFile) == true)
+                                	<font color="#990000" size="-2"><b title="Delete">$i18n.getText("git.project-tab.deleted")</b></font>
+                                	$commit.linkRenderer.getFileDeletedLink($commit.logEntry, $committedFile)
+                            	#elseif ($commit.isAdded($committedFile) == true)
+                                	<font color="#009900" size="-2"><b title="Add">$i18n.getText("git.project-tab.added")</b></font>
+                                	$commit.linkRenderer.getFileAddedLink($commit.logEntry, $committedFile)
+                            	#elseif ($commit.isModified($committedFile) == true)
+                                	<font color="#999933" size="-2"><b title="Modify">$i18n.getText("git.project-tab.modified")</b></font>
+                                	$commit.linkRenderer.getFileModifiedLink($commit.logEntry, $committedFile)
+                            	#elseif ($commit.isReplaced($committedFile) == true)
+                                	<font color="#999933" size="-2"><b title="Replace">$i18n.getText("git.project-tab.replaced")</b></font>
+                                	$commit.linkRenderer.getFileRenamedLink($commit.logEntry, $committedFile)
+                					(from $commit.linkRenderer.getFileReplacedLink($commit.logEntry, $committedFile))
+                            	#elseif ($commit.isCopied($committedFile) == true)
+                					<font color="#999933" size="-2"><b title="Copy">$i18n.getText("git.project-tab.copied")</b></font>
+                					$commit.linkRenderer.getFileReplacedLink($commit.logEntry, $committedFile)
+                					(from $commit.linkRenderer.getFileCopiedLink($commit.logEntry, $committedFile))
+            					#end
+                            	<br />
+                        	#end
+                    	</div>
+                	</td>
                 </tr>
             #end
         #else

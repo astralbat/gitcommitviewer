@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,10 +34,13 @@ import org.eclipse.jgit.api.RmCommand;
 import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.api.errors.ConcurrentRefUpdateException;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.InvalidRefNameException;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
 import org.eclipse.jgit.api.errors.NoFilepatternException;
 import org.eclipse.jgit.api.errors.NoHeadException;
 import org.eclipse.jgit.api.errors.NoMessageException;
+import org.eclipse.jgit.api.errors.RefAlreadyExistsException;
+import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.api.errors.TransportException;
 import org.eclipse.jgit.api.errors.UnmergedPathsException;
 import org.eclipse.jgit.api.errors.WrongRepositoryStateException;
@@ -85,7 +89,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	
 	/** Branch tracking structure for commit walking. We can use/update this so that we know which branch a particular
 	 * commit is on while walking. */
-	private Map<ObjectId, String> branchTracker;
+	private Map<ObjectId, List<String>> branchTracker;
 
 	/**
 	 * {@inheritDoc}
@@ -253,7 +257,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 			private RevCommit lastLastCommit;
 			/** Will be false if we've already read the next entry and awaiting next() to be called to consume it. */
 			private boolean isNextConsumed = true;
-			private String currentBranchName;
+			private List<String> currentBranchList;
 			
 			// Represents the number of next() calls until we renew the walk. We do this to conserve memory
 			// following the advice  of the JGit documentation.
@@ -285,7 +289,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 				try {
 					return new LogEntry<GitRepository, GitCommitKey>(
 							repository,
-							currentBranchName.substring("refs/heads/".length()),
+							currentBranchList,
 							new GitCommitKey(lastCommit.getId().getName(), lastCommit.getCommitTime()),
 							lastLastCommit != null ? new GitCommitKey(lastLastCommit.getId().getName(), lastLastCommit.getCommitTime()) 
 												   : null,
@@ -321,7 +325,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 					lastLastCommit = lastCommit;
 					lastCommit = walk.next();
 					if (lastCommit != null) {
-						currentBranchName = updateBranchTracker(lastCommit);
+						currentBranchList = updateBranchTracker(lastCommit);
 					}
 					
 					// Renew the walk after WALK_REFRESH_INTERVAL
@@ -489,6 +493,182 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	}
 	
 	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void branch(final GitRepository repository, final String branchName) throws RepositoryException {
+		Validate.notNull(repository, "repository must not be null");
+		Validate.notNull(branchName, "branchName must not be null");
+		
+		FileRepository fileRepository;
+		try {
+			final URIish uri = new URIish(repository.getUri());
+			if (!"file".equals(uri.getScheme())) {
+				throw new IllegalArgumentException("Only file:// URI scheme supported");
+			}
+			fileRepository = new FileRepository(uri.getPath());
+			if (!fileRepository.getObjectDatabase().exists()) {
+				fileRepository = (FileRepository)Git.init().setBare(false).setDirectory(new File(uri.getPath())).call()
+						.getRepository();
+			}
+		} catch (final IOException ioe) {
+			throw new RepositoryException("Cannot access the repository: " + ioe.getMessage(), ioe);
+		} catch (final URISyntaxException urise) {
+			throw new RepositoryException("Malformed URI: " + urise.getMessage(), urise);
+		} catch (final GitAPIException gitapie) {
+			throw new RuntimeException(gitapie);
+		}
+		
+		try {
+			Git.wrap(fileRepository)
+				.branchCreate()
+				.setName(branchName)
+				.call();
+			checkout(repository, branchName);
+		} catch (final RefAlreadyExistsException e) {
+			throw new RepositoryException("Branch already exists: " + branchName, e);
+		} catch (final RefNotFoundException e) {
+			throw new RepositoryException("Reference not found: " + branchName, e);
+		} catch (final InvalidRefNameException e) {
+			throw new RepositoryException("Invalid branch name: " + branchName, e);
+		} catch (final GitAPIException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void checkout(final GitRepository repository, final String branchName) throws RepositoryException {
+		Validate.notNull(repository, "repository must not be null");
+		Validate.notNull(branchName, "branchName must not be null");
+		
+		FileRepository fileRepository;
+		try {
+			final URIish uri = new URIish(repository.getUri());
+			if (!"file".equals(uri.getScheme())) {
+				throw new IllegalArgumentException("Only file:// URI scheme supported");
+			}
+			fileRepository = new FileRepository(uri.getPath());
+			if (!fileRepository.getObjectDatabase().exists()) {
+				fileRepository = (FileRepository)Git.init().setBare(false).setDirectory(new File(uri.getPath())).call()
+						.getRepository();
+			}
+		} catch (final IOException ioe) {
+			throw new RepositoryException("Cannot access the repository: " + ioe.getMessage(), ioe);
+		} catch (final URISyntaxException urise) {
+			throw new RepositoryException("Malformed URI: " + urise.getMessage(), urise);
+		} catch (final GitAPIException gitapie) {
+			throw new RuntimeException(gitapie);
+		}
+		
+		try {
+			Git.wrap(fileRepository)
+				.checkout()
+				.setName(branchName)
+				.call();
+		} catch (final RefAlreadyExistsException e) {
+			throw new RepositoryException("Branch already exists: " + branchName, e);
+		} catch (final RefNotFoundException e) {
+			throw new RepositoryException("Reference not found: " + branchName, e);
+		} catch (final InvalidRefNameException e) {
+			throw new RepositoryException("Invalid branch name: " + branchName, e);
+		} catch (final GitAPIException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void deleteBranch(GitRepository repository, String branchName) throws RepositoryException {
+		Validate.notNull(repository, "repository must not be null");
+		Validate.notNull(branchName, "branchName must not be null");
+		
+		FileRepository fileRepository;
+		try {
+			final URIish uri = new URIish(repository.getUri());
+			if (!"file".equals(uri.getScheme())) {
+				throw new IllegalArgumentException("Only file:// URI scheme supported");
+			}
+			fileRepository = new FileRepository(uri.getPath());
+			if (!fileRepository.getObjectDatabase().exists()) {
+				fileRepository = (FileRepository)Git.init().setBare(false).setDirectory(new File(uri.getPath())).call()
+						.getRepository();
+			}
+		} catch (final IOException ioe) {
+			throw new RepositoryException("Cannot access the repository: " + ioe.getMessage(), ioe);
+		} catch (final URISyntaxException urise) {
+			throw new RepositoryException("Malformed URI: " + urise.getMessage(), urise);
+		} catch (final GitAPIException gitapie) {
+			throw new RuntimeException(gitapie);
+		}
+		
+		try {
+			Git.wrap(fileRepository)
+				.branchDelete()
+				.setBranchNames(branchName)
+				.call();
+		} catch (final RefAlreadyExistsException e) {
+			throw new RepositoryException("Branch already exists: " + branchName, e);
+		} catch (final RefNotFoundException e) {
+			throw new RepositoryException("Reference not found: " + branchName, e);
+		} catch (final InvalidRefNameException e) {
+			throw new RepositoryException("Invalid branch name: " + branchName, e);
+		} catch (final GitAPIException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void merge(final GitRepository repository, final String branchName) throws RepositoryException {
+		Validate.notNull(repository, "repository must not be null");
+		Validate.notNull(branchName, "branchName must not be null");
+		
+		FileRepository fileRepository;
+		try {
+			final URIish uri = new URIish(repository.getUri());
+			if (!"file".equals(uri.getScheme())) {
+				throw new IllegalArgumentException("Only file:// URI scheme supported");
+			}
+			fileRepository = new FileRepository(uri.getPath());
+			if (!fileRepository.getObjectDatabase().exists()) {
+				fileRepository = (FileRepository)Git.init().setBare(false).setDirectory(new File(uri.getPath())).call()
+						.getRepository();
+			}
+		} catch (final IOException ioe) {
+			throw new RepositoryException("Cannot access the repository: " + ioe.getMessage(), ioe);
+		} catch (final URISyntaxException urise) {
+			throw new RepositoryException("Malformed URI: " + urise.getMessage(), urise);
+		} catch (final GitAPIException gitapie) {
+			throw new RuntimeException(gitapie);
+		}
+		
+		try {
+			Git.wrap(fileRepository)
+				.merge()
+				.setCommit(true)
+				.include(fileRepository.getRef("refs/heads/" + branchName))
+				.call();
+		} catch (final RefAlreadyExistsException e) {
+			throw new RepositoryException("Branch already exists: " + branchName, e);
+		} catch (final RefNotFoundException e) {
+			throw new RepositoryException("Reference not found: " + branchName, e);
+		} catch (final InvalidRefNameException e) {
+			throw new RepositoryException("Invalid branch name: " + branchName, e);
+		} catch (final GitAPIException e) {
+			throw new RuntimeException(e);
+		} catch (final IOException ioe) {
+			throw new RepositoryException("IO error whilst merging", ioe);
+		}
+	}
+	
+	/**
 	 * Gets a list of files committed against the specified {@code commit}.
 	 * 
 	 * @param fileRepository the repository to examine. Must not be {@code null}
@@ -576,10 +756,11 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 		
 		try {
 			final RevWalk walk = new RevWalk(fileRepository);
-			branchTracker = new HashMap<ObjectId, String>();
+			branchTracker = new HashMap<ObjectId, List<String>>();
 			
 			for (final Ref branch : Git.wrap(fileRepository).branchList().call()) {
-				branchTracker.put(branch.getObjectId(), branch.getName());
+				branchTracker.put(branch.getObjectId(), 
+						new ArrayList<String>(Arrays.asList(branch.getName().substring("refs/heads/".length()))));
 				walk.markStart(walk.parseCommit(branch.getObjectId()));
 			}
 			
@@ -619,22 +800,30 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	 * @return the branch that the specified {@code commit} belongs to. Never {@code null}
 	 * @throws IllegalStateException if the commit's branch isn't known (internal error)
 	 */
-	private String updateBranchTracker(final RevCommit commit) {
+	private List<String> updateBranchTracker(final RevCommit commit) {
 		assert commit != null : "commit must not be null";
 		
-		final String branchName = branchTracker.get(commit);
-		if (branchName == null) {
+		final List<String> branchNames = branchTracker.get(commit);
+		if (branchNames == null) {
 			throw new IllegalStateException("No branch name found for commit: " + commit.getName());
 		}
 		branchTracker.remove(commit);
 		
 		final RevCommit[] parents = commit.getParents();
 		for (int i = 0; i < parents.length; i++) {
-			if (i == 0 || !branchTracker.containsKey(parents[i])) {
-				branchTracker.put(parents[i], branchName);
+			final List<String> parentBranches = branchTracker.get(parents[i]);
+			if (parentBranches != null) {
+				for (final String branch : branchNames) {
+					if (!parentBranches.contains(branch)) {
+						parentBranches.add(branch);
+					}
+				}
 			}
+			//if (i == 0 || parentBranches == null || modified) {
+				branchTracker.put(parents[i], parentBranches != null ? parentBranches : branchNames);
+			//}
 		}
-		return branchName;
+		return branchNames;
 	}
 	
 	/**

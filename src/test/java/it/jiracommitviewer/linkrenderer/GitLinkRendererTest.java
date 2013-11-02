@@ -2,6 +2,7 @@ package it.jiracommitviewer.linkrenderer;
 
 import java.net.MalformedURLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -87,7 +88,7 @@ public class GitLinkRendererTest {
 		assert commitFiles != null : "commitFiles must not be null";
 		
 		final GitRepository repository = new GitRepository("id");
-		return new LogEntry<GitRepository, GitCommitKey>(repository, "master", new GitCommitKey("1234", 0), new GitCommitKey("12345", 0), 
-				"author", new Date(), "msg", commitFiles);
+		return new LogEntry<GitRepository, GitCommitKey>(repository, Arrays.asList("master"), new GitCommitKey("1234", 0), 
+				new GitCommitKey("12345", 0), "author", new Date(), "msg", commitFiles);
 	}
 }
