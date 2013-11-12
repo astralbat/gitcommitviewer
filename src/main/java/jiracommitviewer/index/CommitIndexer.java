@@ -36,6 +36,7 @@ public interface CommitIndexer<R extends AbstractRepository, K extends AbstractC
     public static final String FIELD_ISSUEKEY = "key";
     public static final String FIELD_PROJECTKEY = "project";
     public static final String FIELD_REPOSITORY = "repository";
+    public static final String FIELD_BRANCHMAP = "branchmap";
 
     public static final Analyzer ANALYZER = new LimitTokenCountAnalyzer(new StandardAnalyzer(org.apache.lucene.util.Version.LUCENE_30), 10000);
 
@@ -89,7 +90,7 @@ public interface CommitIndexer<R extends AbstractRepository, K extends AbstractC
 	 * @param user the requesting user. Must not be {@code null}
 	 * @param pageNumber the page of results to get. The first page is 0
 	 * @param pageSize the number of results that are in a page
-	 * @return the requested page. Never {@code null}
+	 * @return the log entries sorted by date in reverse order. Never {@code null}
 	 * @throws IndexException if there is a problem reading the index
 	 */
 	List<LogEntry<R, K>> getAllLogEntriesByProject(String projectKey, User user, int pageNumber, int pageSize) throws IndexException;

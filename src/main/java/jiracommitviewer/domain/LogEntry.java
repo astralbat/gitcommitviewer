@@ -2,6 +2,7 @@ package jiracommitviewer.domain;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -19,6 +20,7 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	private K commitKey;
 	private K parentCommitKey;
 	private final Date date;
+	private final boolean isMerge;
 	private List<String> branches;
 	
 	/**
@@ -32,9 +34,10 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	 * @param date the date of the commit. Must not be {@code null}
 	 * @param message the commit message. Must not be {@code null}
 	 * @param commitFiles the list of files commmitted during this commit. Must not be {@code null}
+	 * @param isMerge true if this was a merge commit
 	 */
 	public LogEntry(final R repository, final List<String> branches, final K commitKey, final K parentCommitKey, final String authorName, 
-			final Date date, final String message, final List<CommitFile> commitFiles) {
+			final Date date, final String message, final List<CommitFile> commitFiles, final boolean isMerge) {
 		super(repository, authorName, message, commitFiles);
 		
 		Validate.notNull(date, "date must not be null");
@@ -43,6 +46,7 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 		this.parentCommitKey = parentCommitKey;
 		this.branches = branches;
 		this.date = date;
+		this.isMerge = isMerge;
 	}
 	
 	/**
@@ -66,18 +70,35 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	/**
 	 * Gets the branches this commit was made on.
 	 * 
-	 * @return the branches. Will be {@code null} if the branches was not specified or is unknown
+	 * @return the branches. Will be {@code null} if the branches was not specified or is unknown. The returned list
+	 * is unmodifiable
 	 */
 	public List<String> getBranches() {
-		return branches;
+		return branches == null ? null : Collections.unmodifiableList(branches);
+	}
+	
+	/**
+	 * Adds a branch for this commit.
+	 * 
+	 * @param branch the branch to add. Must not be {@code null}
+	 */
+	public void addBranch(final String branch) {
+		Validate.notNull(branch, "branch must not be null");
+		
+		this.branches.add(branch);
 	}
 	
 	/**
 	 * Sets the branches this commit was made on.
 	 * 
-	 * @param branches the branches. May be {@code null} if the branches is not known
+	 * @param branches the branches. May be {@code null} if the branches is not known, otherwise it must not contain
+	 * any {@code null} elements
 	 */
 	public void setBranches(final List<String> branches) {
+		if (branches != null) {
+			Validate.noNullElements(branches, "branches must not contain any null elements");
+		}
+		
 		this.branches = branches;
 	}
 	
@@ -88,6 +109,15 @@ public class LogEntry<R extends AbstractRepository, K extends AbstractCommitKey<
 	 */
 	public Date getDate() {
 		return date;
+	}
+	
+	/**
+	 * Gets whether this commit was a merge.
+	 * 
+	 * @return true if it was merged
+	 */
+	public boolean isMerge() {
+		return isMerge;
 	}
 	
 	/**

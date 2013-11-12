@@ -305,6 +305,306 @@ public class GitCommitIndexerTest {
 	}
 	
 	/**
+	 * Tests that a full index is performed when a branch is deleted. We detect by adding a commit against a test branch,
+	 * indexing initially, merging it in and deleting the branch. After updating the index again, the commit is still 
+	 * available, but now no longer associated with the test branch.
+	 * 
+	 * @throws URISyntaxException 
+	 * @throws IOException 
+	 * @throws RepositoryException 
+	 * @throws IndexException 
+	 */
+	@Test
+	public void testReIndexWhenBranchDeleted(final MutableIssue issue) throws IOException, URISyntaxException, RepositoryException, IndexException {
+		final GitRepository gitRepository = RepositoryTestUtils.getCreatedRepository(realRepositoryService);
+		
+		new NonStrictExpectations() {{
+			new MockUp<JiraKeyUtils>() {
+				@Mock
+				public boolean isKeyInString(final String s) {
+					return true;
+				}
+				@Mock
+				public List<String> getIssueKeysFromString(final String s) {
+					Set<String> keys = new HashSet<String>();
+					Pattern issuePattern = Pattern.compile("GCV-[0-9]+");
+					Matcher matcher = issuePattern.matcher(s);
+					int index = 0;
+					while (matcher.find(index)) {
+						keys.add(matcher.group());
+						index = matcher.end();
+					}
+					return new ArrayList<String>(keys);
+				}
+			};
+			
+			indexPathManager.getPluginIndexRootPath(); result = new File(ClassLoader.getSystemResource("indexes").toURI()).getPath();
+			issue.getKey(); result = "GCV-1";
+			repositoryManager.getRepository(anyString); result = gitRepository;
+		}};
+		FileUtils.deleteDirectory(commitIndexer.getIndexPath());
+		
+		// Commit against master first
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("initialFile"), "content".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-1 initial commit 1 ", 
+				new AddedCommitFile("initialFile")));
+		
+		// Create a branch and commit against it
+		realRepositoryService.branch(gitRepository, "testbranch");
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("branchFile"), "content".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-1 initial commit 2", 
+				new AddedCommitFile("branchFile")));
+		
+		// Merge branch in to master
+		realRepositoryService.checkout(gitRepository, "master");
+		realRepositoryService.merge(gitRepository, "testbranch");
+		
+		// Initial index
+		commitIndexer.index(gitRepository);
+		
+		// Delete branch
+		realRepositoryService.deleteBranch(gitRepository, "testbranch");
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-1 testMessage"));
+		
+		// Final index
+		commitIndexer.index(gitRepository);
+		
+		// Assert that the first commit no longer contains a reference to branch 'testbranch'
+		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 3);
+		Assert.assertEquals(3, logEntries.size());
+		
+		boolean found = false;
+		for (final LogEntry<GitRepository, GitCommitKey> entry : logEntries) {
+			if (entry.getMessage().equals("GCV-1 initial commit 2")) {
+				found = true;
+				Assert.assertTrue("entry does not contain branch master", entry.getBranches().contains("master"));
+				Assert.assertFalse("entry should not contain branch testbranch", entry.getBranches().contains("testbranch"));
+			}
+		}
+		Assert.assertTrue("Log entry not found", found);
+	}
+	
+	/**
+	 * Tests that a full index is performed when a branch is merged. We detect by adding an initial commit against master,
+	 * adding a commit against a test branch and master, indexing initially and merging it in. After updating the index again, 
+	 * the branch commit is now associated with the master branch as well.
+	 * 
+	 * @throws URISyntaxException 
+	 * @throws IOException 
+	 * @throws RepositoryException 
+	 * @throws IndexException 
+	 */
+	@Test
+	public void testReIndexWhenMerged(final MutableIssue issue) throws URISyntaxException, IOException, RepositoryException, 
+		IndexException {
+		final GitRepository gitRepository = RepositoryTestUtils.getCreatedRepository(realRepositoryService);
+		
+		new NonStrictExpectations() {{
+			new MockUp<JiraKeyUtils>() {
+				@Mock
+				public boolean isKeyInString(final String s) {
+					return true;
+				}
+				@Mock
+				public List<String> getIssueKeysFromString(final String s) {
+					Set<String> keys = new HashSet<String>();
+					Pattern issuePattern = Pattern.compile("GCV-[0-9]+");
+					Matcher matcher = issuePattern.matcher(s);
+					int index = 0;
+					while (matcher.find(index)) {
+						keys.add(matcher.group());
+						index = matcher.end();
+					}
+					return new ArrayList<String>(keys);
+				}
+			};
+			
+			indexPathManager.getPluginIndexRootPath(); result = new File(ClassLoader.getSystemResource("indexes").toURI()).getPath();
+			issue.getKey(); result = "GCV-1";
+			repositoryManager.getRepository(anyString); result = gitRepository;
+		}};
+		FileUtils.deleteDirectory(commitIndexer.getIndexPath());
+		
+		// Commit against master first
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("initialFile"), "content".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-1 first commit", 
+				new AddedCommitFile("initialFile")));
+		
+		// Create a branch and commit against it
+		realRepositoryService.branch(gitRepository, "testbranch");
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("branchFile"), "content".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-1 branch commit", 
+				new AddedCommitFile("branchFile")));
+		
+		// Commit again to master
+		realRepositoryService.checkout(gitRepository, "master");
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("secondFile"), "content".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-1 second commit", 
+				new AddedCommitFile("secondFile")));
+		
+		// Initial index
+		commitIndexer.index(gitRepository);
+		
+		// Merge branch in to master
+		realRepositoryService.merge(gitRepository, "testbranch");
+		
+		// Final index
+		commitIndexer.index(gitRepository);
+		
+		// Assert that both branches are included
+		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 3);
+		Assert.assertEquals(3, logEntries.size());
+		boolean found = false;
+		for (final LogEntry<GitRepository, GitCommitKey> entry : logEntries) {
+			if (entry.getMessage().equals("GCV-1 branch commit")) {
+				found = true;
+				Assert.assertTrue("entry does not contain branch master", entry.getBranches().contains("master"));
+				Assert.assertTrue("entry does not contain branch testbranch", entry.getBranches().contains("testbranch"));
+			}
+		}
+		Assert.assertTrue("Log entry not found", found);
+	}
+	
+	/**
+	 * Tests that a full index is performed when a branch is fast-forward merged. We detect by adding an initial commit 
+	 * against master, adding a commit against a test branch, indexing initially and merging it in to master. After updating 
+	 * the index again, the branch commit is now associated with the master branch as well.
+	 * 
+	 * @throws URISyntaxException 
+	 * @throws IOException 
+	 * @throws RepositoryException 
+	 * @throws IndexException 
+	 */
+	@Test
+	public void testReIndexWhenFastForward(final MutableIssue issue) throws URISyntaxException, IOException, RepositoryException, 
+		IndexException {
+		final GitRepository gitRepository = RepositoryTestUtils.getCreatedRepository(realRepositoryService);
+		
+		new NonStrictExpectations() {{
+			new MockUp<JiraKeyUtils>() {
+				@Mock
+				public boolean isKeyInString(final String s) {
+					return true;
+				}
+				@Mock
+				public List<String> getIssueKeysFromString(final String s) {
+					Set<String> keys = new HashSet<String>();
+					Pattern issuePattern = Pattern.compile("GCV-[0-9]+");
+					Matcher matcher = issuePattern.matcher(s);
+					int index = 0;
+					while (matcher.find(index)) {
+						keys.add(matcher.group());
+						index = matcher.end();
+					}
+					return new ArrayList<String>(keys);
+				}
+			};
+			
+			indexPathManager.getPluginIndexRootPath(); result = new File(ClassLoader.getSystemResource("indexes").toURI()).getPath();
+			issue.getKey(); result = "GCV-1";
+			repositoryManager.getRepository(anyString); result = gitRepository;
+		}};
+		FileUtils.deleteDirectory(commitIndexer.getIndexPath());
+		
+		// Commit against master first
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("initialFile"), "content".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-1 first commit", 
+				new AddedCommitFile("initialFile")));
+		
+		// Create a branch and commit against it
+		realRepositoryService.branch(gitRepository, "testbranch");
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("branchFile"), "content".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "testAuthor", "GCV-1 branch commit", 
+				new AddedCommitFile("branchFile")));
+		
+		// Initial index
+		commitIndexer.index(gitRepository);
+		
+		// Merge branch in to master (fast forward)
+		realRepositoryService.checkout(gitRepository, "master");
+		realRepositoryService.merge(gitRepository, "testbranch");
+		
+		// Final index
+		commitIndexer.index(gitRepository);
+		
+		// Assert that the first commit no longer contains a reference to branch 'testbranch'
+		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 2);
+		Assert.assertEquals(2, logEntries.size());
+		boolean found = false;
+		for (final LogEntry<GitRepository, GitCommitKey> entry : logEntries) {
+			if (entry.getMessage().equals("GCV-1 branch commit")) {
+				found = true;
+				Assert.assertTrue("entry does not contain branch master", entry.getBranches().contains("master"));
+				Assert.assertTrue("entry does not contain branch testbranch", entry.getBranches().contains("testbranch"));
+			}
+		}
+		Assert.assertTrue("Log entry not found", found);
+	}
+	
+	/**
+	 * Tests that when commits are made, they can be retrieved again in the sorted order according to the service contract.
+	 * 
+	 * @throws RepositoryException 
+	 * @throws URISyntaxException 
+	 * @throws IOException 
+	 * @throws IndexException 
+	 */
+	@Test
+	public void testSortingForIssue(final MutableIssue issue) throws RepositoryException, URISyntaxException, IOException, IndexException {
+		final GitRepository gitRepository = RepositoryTestUtils.getCreatedRepository(realRepositoryService);
+		
+		new NonStrictExpectations() {{
+			new MockUp<JiraKeyUtils>() {
+				@Mock
+				public boolean isKeyInString(final String s) {
+					return true;
+				}
+				@Mock
+				public List<String> getIssueKeysFromString(final String s) {
+					Set<String> keys = new HashSet<String>();
+					Pattern issuePattern = Pattern.compile("GCV-[0-9]+");
+					Matcher matcher = issuePattern.matcher(s);
+					int index = 0;
+					while (matcher.find(index)) {
+						keys.add(matcher.group());
+						index = matcher.end();
+					}
+					return new ArrayList<String>(keys);
+				}
+			};
+			
+			indexPathManager.getPluginIndexRootPath(); result = new File(ClassLoader.getSystemResource("indexes").toURI()).getPath();
+			issue.getKey(); result = "GCV-1";
+			repositoryManager.getRepository(anyString); result = gitRepository;
+		}};
+		FileUtils.deleteDirectory(commitIndexer.getIndexPath());
+		
+		// Create a repository and commit a file - C1
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("testfile"), "C1".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "author", "GCV-1 C1", 
+				new AddedCommitFile("testfile")));
+		
+		// C2
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("testfile2"), "C2".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "author", "GCV-1 C2", 
+				new AddedCommitFile("testfile2")));
+		
+		// C3
+		RepositoryTestUtils.createRepositoryFile(gitRepository, new File("testfile3"), "C3".getBytes());
+		realRepositoryService.commit(gitRepository, new Commit<GitRepository>(gitRepository, "author", "GCV-1 C3", 
+				new AddedCommitFile("testfile3")));
+		
+		// Index
+		commitIndexer.index(gitRepository);
+		
+		List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 3);
+		Assert.assertEquals(3, logEntries.size());
+		Assert.assertEquals("GCV-1 C3", logEntries.get(0).getMessage());
+		Assert.assertEquals("GCV-1 C2", logEntries.get(1).getMessage());
+		Assert.assertEquals("GCV-1 C1", logEntries.get(2).getMessage());
+	}
+	
+	/**
 	 * Checks that a particular commit hash appears in the list of supplied {@code logEntries}.
 	 * 
 	 * @param hash the has to check for. Must not be {@code null}

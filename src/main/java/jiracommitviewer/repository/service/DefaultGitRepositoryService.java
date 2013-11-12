@@ -7,11 +7,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 
 import jiracommitviewer.domain.AbstractPathCommitFile;
 import jiracommitviewer.domain.AddedCommitFile;
@@ -30,6 +28,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.Validate;
 import org.eclipse.jgit.api.AddCommand;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.MergeResult;
 import org.eclipse.jgit.api.RmCommand;
 import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.api.errors.ConcurrentRefUpdateException;
@@ -49,14 +48,12 @@ import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.diff.RawTextComparator;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
 import org.eclipse.jgit.errors.MissingObjectException;
-import org.eclipse.jgit.errors.StopWalkException;
 import org.eclipse.jgit.internal.storage.file.FileRepository;
 import org.eclipse.jgit.lib.MutableObjectId;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevWalk;
-import org.eclipse.jgit.revwalk.filter.RevFilter;
 import org.eclipse.jgit.transport.Connection;
 import org.eclipse.jgit.transport.FetchResult;
 import org.eclipse.jgit.transport.JschConfigSessionFactory;
@@ -222,6 +219,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 		try {
 			final FetchResult result = Git.wrap(fileRepository)
 				.fetch()
+				.setRemoveDeletedRefs(true)
 				.setTransportConfigCallback(new TransportConfigCallback() {
 					@Override
 					public void configure(final Transport transport) {
@@ -244,7 +242,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	 */
 	@Override
 	public synchronized LogEntryEnumerator<GitRepository, GitCommitKey> getLogEntries(final GitRepository repository, 
-			final Set<GitCommitKey> commitKeys) throws RepositoryException {
+			final Map<GitCommitKey, List<String>> commitKeys) throws RepositoryException {
 		Validate.notNull(repository, "repository must not be null");
 		
 		final FileRepository fileRepository = getFileRepository(repository);
@@ -265,9 +263,9 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 			
 			{
 				if (commitKeys != null) {
-					final Set<ObjectId> objectIds = new HashSet<ObjectId>();
-					for (final GitCommitKey commitKey : commitKeys) {
-						objectIds.add(ObjectId.fromString(commitKey.getCommitHash()));
+					final Map<ObjectId, List<String>> objectIds = new HashMap<ObjectId, List<String>>();
+					for (final Map.Entry<GitCommitKey, List<String>> commitKey : commitKeys.entrySet()) {
+						objectIds.put(ObjectId.fromString(commitKey.getKey().getCommitHash()), commitKey.getValue());
 					}
 					walk = createRevWalker(fileRepository, objectIds);
 				} else {
@@ -296,7 +294,8 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 							lastCommit.getAuthorIdent().getName(),
 							new Date((long)lastCommit.getCommitTime() * 1000),
 							lastCommit.getFullMessage(),
-							getAllFilesFromCommit(fileRepository, lastCommit, walk)
+							getAllFilesFromCommit(fileRepository, lastCommit, walk),
+							lastCommit.getParentCount() > 1
 					);
 				} catch (final MissingObjectException e) {
 					throw new RepositoryException("An expected object is missing", e);
@@ -332,7 +331,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 					if (--walkRefreshInterval == 0) {
 						walkRefreshInterval = WALK_REFRESH_INTERVAL;
 						walk.dispose();
-						walk = createRevWalker(fileRepository, branchTracker.keySet());
+						walk = createRevWalker(fileRepository, new HashMap<ObjectId, List<String>>(branchTracker));
 					}
 					isNextConsumed = false;
 				} catch (final MissingObjectException e) {
@@ -373,7 +372,8 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 					commit.getAuthorIdent().getName(),
 					new Date((long)commit.getCommitTime() * 1000),
 					commit.getFullMessage(),
-					getAllFilesFromCommit(fileRepository, commit, walk)
+					getAllFilesFromCommit(fileRepository, commit, walk),
+					commit.getParentCount() > 1
 			);
 		} catch (final MissingObjectException e1) {
 			throw new RepositoryException("Could not locate a commit for repository: " + repository.getId() + 
@@ -383,6 +383,34 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 					" and commit key: " + commitKey.marshal() + ". The object identified by commitKey doesn't appear to be a commit", e1);
 		} catch (final IOException e1) {
 			throw new RepositoryException("Repository access IO error for repository: " + repository.getId(), e1);
+		}
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public Map<String, GitCommitKey> getBranchHeads(final GitRepository repository) throws RepositoryException {
+		Validate.notNull(repository, "repository must not be null");
+		
+		final FileRepository fileRepository = getFileRepository(repository);
+		try {
+			final List<Ref> branchRefs = Git.wrap(fileRepository)
+				.branchList()
+				.call();
+			
+			final Map<String, GitCommitKey> branches = new HashMap<String, GitCommitKey>();
+			final RevWalk walk = new RevWalk(fileRepository);
+			for (final Ref branch : branchRefs) {
+				final RevCommit revCommit = walk.parseCommit(branch.getObjectId());
+				branches.put(branch.getName().substring("refs/heads/".length()), 
+						new GitCommitKey(branch.getObjectId().getName(), revCommit.getCommitTime()));
+			}
+			return branches;
+		} catch (final IOException ioe) {
+			throw new RepositoryException("IO error while scanning branch tips", ioe);
+		} catch (final GitAPIException e) {
+			throw new RuntimeException(e);
 		}
 	}
 	
@@ -607,10 +635,13 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 		}
 		
 		try {
-			Git.wrap(fileRepository)
+			final List<String> deletedBranches = Git.wrap(fileRepository)
 				.branchDelete()
 				.setBranchNames(branchName)
 				.call();
+			for (final String deletedBranch : deletedBranches) {
+				logger.debug("Deleted branch: " + deletedBranch);
+			}
 		} catch (final RefAlreadyExistsException e) {
 			throw new RepositoryException("Branch already exists: " + branchName, e);
 		} catch (final RefNotFoundException e) {
@@ -650,11 +681,16 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 		}
 		
 		try {
-			Git.wrap(fileRepository)
+			final MergeResult result = Git.wrap(fileRepository)
 				.merge()
 				.setCommit(true)
 				.include(fileRepository.getRef("refs/heads/" + branchName))
 				.call();
+			logger.debug("Merge status is " + result.getMergeStatus().toString());
+			if (!result.getMergeStatus().isSuccessful()) {
+				throw new RepositoryException("Unsuccessful merge");
+			}
+			logger.debug("Merged to new head: " + result.getNewHead());
 		} catch (final RefAlreadyExistsException e) {
 			throw new RepositoryException("Branch already exists: " + branchName, e);
 		} catch (final RefNotFoundException e) {
@@ -734,9 +770,8 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	/**
 	 * Creates a new repository walker that walks all branches on the supplied {@code fileRepository}.
 	 * <p>
-	 * Commits are walked backwards in time starting from the leaves (the most recent commits). By providing a {@code commitKeyMap}
-	 * the later commits can be skipped by starting the search at the {@code commitKey}'s time and retrieving all commits
-	 * before it. The first commit walked by the returned walker will be directly after the {@code commitKey}'s.
+	 * Commits are walked backwards in time starting from the leaves (the most recent commits). By providing a {@code commitKeys}
+	 * map, only those specified branch segments will be walked.
 	 * <p>
 	 * Should history have changed in the repository that renders the {@code commitKey} missing, a {@code RepositoryException}
 	 * will be thrown.
@@ -750,7 +785,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 	 * @return the revision walker instance. Never {@code null}
 	 * @throws RepositoryException if an error occurs while reading the repository
 	 */
-	private RevWalk createRevWalker(final FileRepository fileRepository, final Set<ObjectId> commitKeys) 
+	private RevWalk createRevWalker(final FileRepository fileRepository, final Map<ObjectId, List<String>> commitKeys) 
 			throws RepositoryException {
 		assert fileRepository != null : "fileRepository must not be null";
 		
@@ -758,30 +793,21 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 			final RevWalk walk = new RevWalk(fileRepository);
 			branchTracker = new HashMap<ObjectId, List<String>>();
 			
-			for (final Ref branch : Git.wrap(fileRepository).branchList().call()) {
-				branchTracker.put(branch.getObjectId(), 
-						new ArrayList<String>(Arrays.asList(branch.getName().substring("refs/heads/".length()))));
-				walk.markStart(walk.parseCommit(branch.getObjectId()));
-			}
-			
-			// Create a revision filter to filter out all commits equal or being a parent of any of the commitKeys specified.
-			// We must also update the branchTracker as we progress.
-			if (commitKeys != null) {
-				walk.setRevFilter(new NewCommitsRevisionFilter(commitKeys) {
-					@Override
-					public boolean include(final RevWalk walker, final RevCommit cmit) throws StopWalkException, MissingObjectException,
-							IncorrectObjectTypeException, IOException {
-						final boolean include = super.include(walker, cmit);
-						if (!include) {
-							updateBranchTracker(cmit);
-						}
-						return include;
+			if (commitKeys == null) {
+				for (final Ref branch : Git.wrap(fileRepository).branchList().call()) {
+					branchTracker.put(branch.getObjectId(), 
+							new ArrayList<String>(Arrays.asList(branch.getName().substring("refs/heads/".length()))));
+					walk.markStart(walk.parseCommit(branch.getObjectId()));
+				}
+			} else {
+				for (final Map.Entry<ObjectId, List<String>> commitKey : commitKeys.entrySet()) {
+					try {
+						walk.markStart(walk.parseCommit(commitKey.getKey()));
+						branchTracker.put(commitKey.getKey(), new ArrayList<String>(commitKey.getValue()));
+					} catch (final MissingObjectException moe) {
+						// Ignore missing
 					}
-					@Override
-					public RevFilter clone() {
-						return super.clone();
-					}
-				});
+				}
 			}
 			
 			return walk;
@@ -819,9 +845,7 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 					}
 				}
 			}
-			//if (i == 0 || parentBranches == null || modified) {
-				branchTracker.put(parents[i], parentBranches != null ? parentBranches : branchNames);
-			//}
+			branchTracker.put(parents[i], parentBranches != null ? parentBranches : branchNames);
 		}
 		return branchNames;
 	}
@@ -896,60 +920,6 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
     	// Configure private key for SSH
     	if (transport instanceof SshTransport) {
 			((SshTransport)transport).setSshSessionFactory(getSshSessionFactory(repository));
-		}
-    }
-    
-    /**
-     * A revision filter that maintains a stateful collection of SHA-1 'stops'. Whenever a commit is reached with a SHA-1 sum
-     * equal to any stop, it and all its parents will never be included. This essentially forces only 'new' commits to ever be
-     * included.
-     * <p>
-     * Because of its statefulness, instances cannot be used between multiple instances of {@link RevWalk}s.
-     * 
-     * @author mark
-     */
-    private class NewCommitsRevisionFilter extends RevFilter {
-    	
-		private final Set<ObjectId> sha1Stops;
-		
-		/**
-		 * Initialises a new revision filter with the specified stops.
-		 * 
-		 * @param sha1Stops the stops to initialise with. Must not be {@code null}
-		 */
-		public NewCommitsRevisionFilter(final Set<ObjectId> sha1Stops) {
-			Validate.notNull(sha1Stops, "sha1Stops must not be null");
-			
-			this.sha1Stops = sha1Stops;
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 */
-		@Override
-		public boolean include(final RevWalk walker, final RevCommit cmit) throws StopWalkException, MissingObjectException,
-				IncorrectObjectTypeException, IOException {
-			boolean include = true;
-			
-			if (sha1Stops.contains(cmit.getId().getName())) {
-				sha1Stops.remove(cmit.getId().getName());
-				for (final RevCommit parent : cmit.getParents()) {
-					sha1Stops.add(parent.getId());
-				}
-				include = false;
-			}
-			if (!include) {
-				updateBranchTracker(cmit);
-			}
-			return include;
-		}
-		
-		/**
-		 * {@inheritDoc}
-		 */
-		@Override
-		public RevFilter clone() {
-			return new NewCommitsRevisionFilter(new HashSet<ObjectId>(sha1Stops));
 		}
     }
 }

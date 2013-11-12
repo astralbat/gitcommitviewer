@@ -44,7 +44,7 @@ public class GitCommitAction extends AbstractIssueAction {
         this.descriptor = descriptor;
         this.logEntry = new LogEntry<GitRepository, GitCommitKey>(logEntry.getRepository(), logEntry.getBranches(), logEntry.getCommitKey(), 
         		logEntry.getParentCommitKey(), logEntry.getAuthorName(), logEntry.getDate(), rewriteLogMessage(logEntry.getMessage()), 
-        		logEntry.getCommitFiles());
+        		logEntry.getCommitFiles(), logEntry.isMerge());
     }
 
     /**

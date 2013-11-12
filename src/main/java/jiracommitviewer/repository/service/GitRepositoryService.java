@@ -1,5 +1,8 @@
 package jiracommitviewer.repository.service;
 
+import java.util.List;
+import java.util.Map;
+
 import jiracommitviewer.domain.Commit;
 import jiracommitviewer.domain.GitCommitKey;
 import jiracommitviewer.domain.GitRepository;
@@ -36,6 +39,28 @@ public interface GitRepositoryService extends RepositoryService<GitRepository, G
 	 * @throws RepositoryException if an error occurs whilst checking
 	 */
 	boolean isCloned(GitRepository repository) throws RepositoryException;
+	
+	/**
+	 * Gets an iterator of log entries from the repository from the specified {@code commitKeys} representing tips
+	 * of branches to enumerate from.
+	 * 
+	 * @param repository the repository. Must not be {@code null}
+	 * @param commitKeys the commit keys to branch names to enumerate from. When {@code null}, all log entries are returned from the end
+	 * @return an enumerator for reading log entries sequentially. Never {@code null}
+	 * @throws RepositoryException if {@code commitKey} is not {@code null} and the identified commit does not exist; or
+	 * if there is an error while accessing the repository
+	 */
+	LogEntryEnumerator<GitRepository, GitCommitKey> getLogEntries(GitRepository repository, Map<GitCommitKey, List<String>> commitKeys) 
+			throws RepositoryException;
+	
+	/**
+	 * Gets a list of branch tips in the specified {@code repository} with their commit keys.
+	 * 
+	 * @param the repository whose clone to get branches tips for. Must not be {@code null}
+	 * @return the branch tips. Never {@code null}
+	 * @throws RepositoryException
+	 */
+	Map<String, GitCommitKey> getBranchHeads(GitRepository repository) throws RepositoryException;
 	
 	/**
 	 * Creates a new, non-bare repository at the location specified by the URI within {@code repository}, creates a new

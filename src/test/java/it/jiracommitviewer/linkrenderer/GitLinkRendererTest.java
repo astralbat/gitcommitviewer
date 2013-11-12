@@ -89,6 +89,6 @@ public class GitLinkRendererTest {
 		
 		final GitRepository repository = new GitRepository("id");
 		return new LogEntry<GitRepository, GitCommitKey>(repository, Arrays.asList("master"), new GitCommitKey("1234", 0), 
-				new GitCommitKey("12345", 0), "author", new Date(), "msg", commitFiles);
+				new GitCommitKey("12345", 0), "author", new Date(), "msg", commitFiles, false);
 	}
 }

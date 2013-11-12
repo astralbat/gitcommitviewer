@@ -5,9 +5,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +28,7 @@ import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.DateTools.Resolution;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.Term;
@@ -81,9 +82,6 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     @Autowired
     private IndexPathManager indexPathManager;
     
-    private final Hashtable<Object, Map<List<String>, GitCommitKey>> branchIndexedCommitTbl = new Hashtable<Object, Map<List<String>, GitCommitKey>>();
-    private final Hashtable<Object, Set<GitCommitKey>> frequentIndexedCommitTbl = new Hashtable<Object, Set<GitCommitKey>>();
-    private int frequentIndexedCount = 0;
     private LuceneIndexAccessor indexAccessor;
 
     public GitCommitIndexer() {
@@ -103,11 +101,8 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     	
     	gitRepositoryService.cloneRepository(repository);
     	gitRepositoryService.fetch(repository);
-    	if (createIndexIfNeeded()) {
-    		branchIndexedCommitTbl.clear();
-        	frequentIndexedCommitTbl.clear();
-    	}
-    	updateIndex(repository);
+    	createIndexIfNeeded();
+    	updateIndex(repository, false);
     }
     
     /**
@@ -141,7 +136,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	
 	        try {
 	            final TopDocs hits = searcher.search(createQueryByIssueKey(issue), MAX_COMMITS, 
-	            		new Sort(new SortField(FIELD_DATE, SortField.STRING, true)));
+	            		new Sort(new SortField(FIELD_DATE, SortField.LONG, true)));
 	            final List<LogEntry<GitRepository, GitCommitKey>> logEntries = 
 	            		new ArrayList<LogEntry<GitRepository, GitCommitKey>>(hits.totalHits);
 	
@@ -369,8 +364,6 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	        try {
 	            writer = indexAccessor.getIndexWriter(getIndexPath().getPath(), false, ANALYZER);
 	            writer.deleteDocuments(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId())));
-	            branchIndexedCommitTbl.remove(repository.getId());
-	            frequentIndexedCommitTbl.remove(repository.getId());
 	        } finally {
 	            if (writer != null) {
 	            	writer.close();
@@ -404,100 +397,156 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
      * This method updates the index, assuming it already exists.
      *
      * @param repository the repository to index. It must already be active and ready to index. Must not be {@code null}
+     * @param fullIndex true if this should be a full index rather than a partial index
      * @throws IndexException if there is some problem in the indexing subsystem meaning indexes cannot be updated
      * @throws RepositoryException 
      */
-    private void updateIndex(final GitRepository repository) throws IndexException, RepositoryException {
+    private void updateIndex(final GitRepository repository, final boolean fullIndex) throws IndexException, RepositoryException {
     	assert repository != null : "repository must not be null";
     	
-        logger.debug("Updating commit index for repository: " + repository.getId());
-        
-        // Operate on clones of the global state. This way we shall 'commit' them to the global state only if we
-        // are successful. If we don't do this, failures will cause earlier parts of the graph to remain unindexed.
-        @SuppressWarnings("unchecked")
-		final Hashtable<Object, Map<List<String>, GitCommitKey>> branchIndexedCommitTbl = 
-        		(Hashtable<Object, Map<List<String>, GitCommitKey>>)this.branchIndexedCommitTbl.clone();
-        @SuppressWarnings("unchecked")
-		final Hashtable<Object, Set<GitCommitKey>> frequentIndexedCommitTbl = 
-        		(Hashtable<Object, Set<GitCommitKey>>)this.frequentIndexedCommitTbl.clone();
-        int frequentIndexedCount = this.frequentIndexedCount;
+        logger.debug("Updating commit index for repository: " + repository.getId() + ", full index = " + fullIndex);
     	
         try {
-        	// Make sure latest/frequent hashes are initialised
-            if (branchIndexedCommitTbl.get(repository.getId()) == null) {
-            	branchIndexedCommitTbl.put(repository.getId(), new HashMap<List<String>, GitCommitKey>());
-            	frequentIndexedCommitTbl.put(repository.getId(), updateFrequentIndexedCommitTable(repository));
+            // Examine differences between the heads as they are now and as they were when last indexed. Any differences
+            // mean we'll have to examine every ancestor of these tips.
+            // This should cover scenarios such as:
+            // - Creating a new branch (derived from another tip, or not)
+            // - Deleting an existing branch
+            // - Merging an existing branch (with commit and fast-forward)
+            // - Resetting a branch to an older commit (we must index from both old and new nodes)
+            final Map<String, GitCommitKey> repositoryBranches = gitRepositoryService.getBranchHeads(repository);
+            final Map<String, GitCommitKey> indexedBranches = getBranchHeadsIndexed(repository);
+            final Map<GitCommitKey, List<String>> commitKeys = new HashMap<GitCommitKey, List<String>>();
+            if (fullIndex) {
+            	for (final Map.Entry<String, GitCommitKey> branchHead : repositoryBranches.entrySet()) {
+            		commitKeys.put(branchHead.getValue(), Arrays.asList(branchHead.getKey()));
+            	}
+            } else {
+	            for (final Map.Entry<String, GitCommitKey> branchHead : repositoryBranches.entrySet()) {
+	            	final GitCommitKey indexedCommitKey = indexedBranches.remove(branchHead.getKey());
+	            	// Detect branch added
+	            	if (indexedCommitKey == null) {
+	            		commitKeys.put(branchHead.getValue(), Arrays.asList(branchHead.getKey()));
+	            		continue;
+	            	}
+	            	if (!indexedCommitKey.getCommitHash().equals(branchHead.getValue().getCommitHash())) {
+	            		commitKeys.put(indexedCommitKey, Arrays.asList(branchHead.getKey()));
+	            		commitKeys.put(branchHead.getValue(), Arrays.asList(branchHead.getKey()));
+	            	}
+	            }
+	            // Detect branches removed
+	            for (final Map.Entry<String, GitCommitKey> branchHead : indexedBranches.entrySet()) {
+            		commitKeys.put(branchHead.getValue(), Arrays.asList(branchHead.getKey()));
+            	}
             }
-
-            final Set<GitCommitKey> commitKeys = new HashSet<GitCommitKey>();
-            commitKeys.addAll(branchIndexedCommitTbl.get(repository.getId()).values());
-            commitKeys.addAll(frequentIndexedCommitTbl.get(repository.getId()));
+            
+            // Get the filtered entries
             final LogEntryEnumerator<GitRepository, GitCommitKey> logEntryEnumerator = 
-            		gitRepositoryService.getLogEntries(repository, commitKeys);
+            		gitRepositoryService.getLogEntries(repository, commitKeys.size() == 0 ? null : commitKeys);
 
             final IndexWriter writer = indexAccessor.getIndexWriter(getIndexPath().getPath(), false, ANALYZER);
-
+            // 0 - Success
+            // 1 - Failure
+            int status = 1;
             try {
+            	writer.prepareCommit();
                 final IndexReader reader = indexAccessor.getIndexReader(getIndexPath().getPath());
-
+                
+                // Delete all documents to start with when full indexing
+                if (fullIndex) {
+                	writer.deleteDocuments(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId())));
+                }
+                
                 try {
                 	while (logEntryEnumerator.hasNext()) {
                 		final LogEntry<GitRepository, GitCommitKey> logEntry = logEntryEnumerator.next();
+                		
                 		if (TextUtils.stringSet(logEntry.getMessage()) && isKeyInString(logEntry)) {
-                			if (!hasDocument(repository, logEntry.getCommitKey(), reader)) {
-                				final Document doc = getDocument(repository, logEntry);
+                			if (fullIndex || getDocument(repository, logEntry, reader, true) == null) {
+                				final Document previousDocument = getDocument(repository, logEntry, reader, false);
+                				
+                				// Delete any previous document (existing document, but with different branch sets)
+                				final TermQuery repoQuery = new TermQuery(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId())));
+                	            final TermQuery revQuery = new TermQuery(new Term(FIELD_COMMITKEY, logEntry.getCommitKey().marshal()));
+                	            final BooleanQuery repoAndRevQuery = new BooleanQuery();
+                	            repoAndRevQuery.add(repoQuery, BooleanClause.Occur.MUST);
+                	            repoAndRevQuery.add(revQuery, BooleanClause.Occur.MUST);
+                				writer.deleteDocuments(repoAndRevQuery);
+
+                				// We may not be scanning all branches, so we must check that on previous document,
+                				// if a branch existed on it before that doesn't appear on it now and the branch
+                				// still exists, add it.
+                				if (previousDocument != null) {
+                					final List<String> previousBranches = new ArrayList<String>();
+                					for (final Fieldable fieldable : previousDocument.getFieldables(FIELD_BRANCH)) {
+                						previousBranches.add(fieldable.stringValue());
+                					}
+                					previousBranches.removeAll(logEntry.getBranches());
+                					for (final String previousBranch : previousBranches) {
+                						if (repositoryBranches.keySet().contains(previousBranch)) {
+                							Collection<List<String>> scanningBranches = commitKeys.values();
+                							// Only if we're not scanning it
+                							if (!scanningBranches.contains(Arrays.asList(previousBranch))) {
+                								logEntry.addBranch(previousBranch);
+                							}
+                						}
+                					}
+                				}
+                				
+                				// Create the new document and add it to the index
+                				final Document doc = createDocument(repository, logEntry);
                 				logger.debug("Indexing repository: " + repository.getId() + ", commit: " + 
                 						logEntry.getCommitKey().marshal());
                 				writer.addDocument(doc);
-                				if (frequentIndexedCount++ % 100 == 0) {
-                					frequentIndexedCommitTbl.get(repository.getId()).add(logEntry.getCommitKey());
-                				}
-                				// Update the latest branches indexed. Branches should never be null while indexing
-                				if (branchIndexedCommitTbl.get(repository.getId()).get(logEntry.getBranches()) != null) {
-                					if (logEntry.getCommitKey().compareTo(branchIndexedCommitTbl.get(repository.getId())
-                							.get(logEntry.getBranches())) > 0) {
-                						branchIndexedCommitTbl.get(repository.getId()).put(logEntry.getBranches(), logEntry.getCommitKey());
-                					}
-                				}
                 			}
                 		}
                 	}
                 } finally {
                     reader.close();
                 }
-                // 'Commit' to global state
-                this.branchIndexedCommitTbl.clear();
-                this.branchIndexedCommitTbl.putAll(branchIndexedCommitTbl);
-                this.frequentIndexedCommitTbl.clear();
-                this.frequentIndexedCommitTbl.putAll(frequentIndexedCommitTbl);
-                this.frequentIndexedCount = frequentIndexedCount;
+                status = 0;
             } finally {
-                writer.close();
+            	if (status == 0) {
+            		writer.commit();
+                    updateBranchesIndexed(repository, repositoryBranches, writer);
+            	} else if (status == 1) {
+            		logger.debug("Error, rolling back indexing just performed");
+            		writer.rollback();
+            	}
+            	if (status == 0 || status == 1) {
+            		writer.close();
+            	}
             }
         } catch (IOException e) {
             logger.warn("Unable to index repository '" + repository.getDisplayName() + "'", e);
         }
+        logger.debug("Indexing for repository complete: " + repository.getId());
     }
     
     /**
-     * Works out whether a given commit for the specified repository is already in the index or not.
+     * Works out whether a given commit for the specified repository is already in the index or not and returns its document
+     * if it is.
+     * <p>
+     * This searches by the repository and commit key matching the specified {@code logEntry}.
      * 
      * @param gitRepository the repository. Must not be {@code null}
-     * @param commitKey the commit. Must not be {@code null}
+     * @param logEntry the commit. Must not be {@code null}
      * @param reader the index reader. Must not be {@code null}
+     * @param withBranches if true, branch names from the specified {@code logEntry} must match those in any document as well
+     * @return the document if found, or {@code null} if not
      * @throws IndexException if a problem occurs reading the index
      */
-    private boolean hasDocument(final GitRepository gitRepository, final GitCommitKey commitKey, final IndexReader reader) 
-    		throws IndexException {
+    private Document getDocument(final GitRepository gitRepository, final LogEntry<GitRepository, GitCommitKey> logEntry, 
+    		final IndexReader reader, final boolean withBranches) throws IndexException {
     	assert gitRepository != null : "gitRepository must not be null";
-    	assert commitKey != null : "commitKey must not be null";
+    	assert logEntry != null : "logEntry must not be null";
     	assert reader != null : "reader must not be null";
     	
         final IndexSearcher searcher = new IndexSearcher(reader);
         try {
 	        try {
 	            final TermQuery repoQuery = new TermQuery(new Term(FIELD_REPOSITORY, String.valueOf(gitRepository.getId())));
-	            final TermQuery revQuery = new TermQuery(new Term(FIELD_COMMITKEY, commitKey.marshal()));
+	            final TermQuery revQuery = new TermQuery(new Term(FIELD_COMMITKEY, logEntry.getCommitKey().marshal()));
 	            final BooleanQuery repoAndRevQuery = new BooleanQuery();
 	
 	            repoAndRevQuery.add(repoQuery, BooleanClause.Occur.MUST);
@@ -506,11 +555,21 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	            final TopDocs hits = searcher.search(repoAndRevQuery, MAX_COMMITS);
 	
 	            if (hits.totalHits == 1) {
-	                return true;
+	                final Document foundDocument = searcher.doc(hits.scoreDocs[0].doc);
+	                if (!withBranches) {
+	                	return foundDocument;
+	                }
+	                final Fieldable[] fieldables = foundDocument.getFieldables(FIELD_BRANCH);
+	                final String[] documentBranches = new String[fieldables.length];
+	                for (int i = 0; i < fieldables.length; i++) {
+	                	documentBranches[i] = fieldables[i].stringValue();
+	                }
+	                return logEntry.getBranches().containsAll(Arrays.asList(documentBranches)) ? foundDocument : null;
 	            } else if (hits.totalHits == 0) {
-	                return false;
+	                return null;
 	            } else {
-	                throw new IndexException("Found MORE than one document for commit key: " + commitKey.marshal() + ", repository=" + gitRepository.getId());
+	                throw new IndexException("Found MORE than one document for commit key: " + logEntry.getCommitKey().marshal() + 
+	                	", repository=" + gitRepository.getId());
 	            }
 	        } finally {
 	            searcher.close();
@@ -552,7 +611,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
      * @param logEntry the log entry that is about to be indexed. Must not be {@code null}
      * @return a Lucene document object that is ready to be added to an index. Never {@code null}
      */
-    private Document getDocument(final GitRepository gitRepository, final LogEntry<GitRepository, GitCommitKey> logEntry) {
+    private Document createDocument(final GitRepository gitRepository, final LogEntry<GitRepository, GitCommitKey> logEntry) {
     	assert gitRepository != null : "gitRepository must not be null";
     	assert logEntry != null : "logEntry must not be null";
     	
@@ -593,54 +652,109 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     }
     
     /**
-     * Gets the last {@code CommitKey}s indexed by the indexer for repository {@code repository}.
+     * Gets a map of branches that have been indexed for this {@code repository}.
      * 
-     * @param repository the repository to get the last indexed commits for. Must not be {@code null}
-     * @return the last commit key map of branch -> commit. Never {@code null}
+     * @param repository the repository to get indexed branches for. Must not be {@code null}
+     * @return the indexed branches or an empty map if no indexed branches could be found
      * @throws IndexException
-     * @throws IOException
      */
-    private Set<GitCommitKey> updateFrequentIndexedCommitTable(final AbstractRepository repository) throws IndexException {
+    private Map<String, GitCommitKey> getBranchHeadsIndexed(final GitRepository repository) throws IndexException {
     	assert repository != null : "repository must not be null";
     	
-        if (logger.isDebugEnabled()) {
-            logger.debug("Updating last commit indexed.");
-        }
-
-        // find all log entries that have already been indexed for the specified repository
-        // (i.e. all logs that have been associated with issues in JIRA)
-        final Set<GitCommitKey> commitKeySet = new HashSet<GitCommitKey>();
-
-        final IndexReader reader;
-        try {
-            reader = IndexReader.open(FSDirectory.open(new File(getIndexPath().getPath()), new SimpleFSLockFactory()));
-        } catch (final IOException e) {
-            throw new IndexException("Problem with path " + getIndexPath().getPath() + ": " + e.getMessage(), e);
-        }
-        
-        final IndexSearcher searcher = new IndexSearcher(reader);
-        try {
-	        try {
-	            final TopDocs hits = searcher.search(new TermQuery(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId()))), 
-	            		MAX_COMMITS, new Sort(new SortField(FIELD_DATE, SortField.STRING, true)));
-	
-	            int count = 0;
-	            for (int i = 0; i < Math.min(hits.totalHits, MAX_COMMITS); ++i) {
-	                final Document doc = searcher.doc(hits.scoreDocs[i].doc);
-	                final GitCommitKey commitKey = GitCommitKey.unmarshal(doc.get(FIELD_COMMITKEY));
-	                if (count++ % 100 == 0) {
-	                	commitKeySet.add(commitKey);
-	                }
-	            }
-	        } finally {
-	        	searcher.close();
-	            reader.close();
-	        }
-        } catch (final IOException ioe) {
-        	throw new IndexException("IO error while reading from index for repository: " + repository.getId(), ioe);
-        }
-
-        return commitKeySet;
+    	final Document doc = getBranchesIndexedDocument(repository);
+    	if (doc == null) {
+    		return Collections.emptyMap();
+    	}
+    	final Map<String, GitCommitKey> branches = new HashMap<String, GitCommitKey>();
+		for (final Fieldable branch : doc.getFieldables(FIELD_BRANCH)) {
+			final String[] parts = StringUtils.split(branch.stringValue(), "-", 3);
+			branches.put(parts[2], GitCommitKey.unmarshal(parts[0] + "-" + parts[1]));
+		}
+		return branches;
+    }
+    
+    /**
+     * Updates the map of indexed {@code branches} for the specified {@code repository}.
+     * 
+     * @param repository the repository whose branches to update. Must not be {@code null}
+     * @param branches the map of branches to write to the index. Must not be {@code null}
+     * @param writer the opened index writer. Must not be {@code null}
+     * @throws IndexException
+     */
+    private void updateBranchesIndexed(final GitRepository repository, final Map<String, GitCommitKey> branches,
+    		final IndexWriter writer) throws IndexException {
+    	assert repository != null : "repository must not be null";
+    	assert branches != null : "branches must not be null";
+    	assert writer != null : "writer must not be null";
+    	
+    	// Get and update or create a new document containing the given branches
+    	Document doc = getBranchesIndexedDocument(repository);
+    	if (doc == null) {
+    		doc = new Document();
+    		doc.add(new Field(FIELD_REPOSITORY, String.valueOf(repository.getId()), Field.Store.YES, Field.Index.NOT_ANALYZED));
+    		doc.add(new Field(FIELD_BRANCHMAP, String.valueOf(Boolean.TRUE), Field.Store.YES, Field.Index.NOT_ANALYZED));
+    	} else {
+    		doc.removeFields(FIELD_BRANCH);
+    	}
+    	for (final Map.Entry<String, GitCommitKey> branch : branches.entrySet()) {
+			doc.add(new Field(FIELD_BRANCH, branch.getValue().marshal() + "-" + branch.getKey(), Field.Store.YES, 
+				Field.Index.NOT_ANALYZED));
+		}
+    	
+    	// Write the document, replacing any that existed before
+    	try {
+    		final TermQuery repoQuery = new TermQuery(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId())));
+			final TermQuery branchMapQuery = new TermQuery(new Term(FIELD_BRANCHMAP, String.valueOf(Boolean.TRUE)));
+         
+			final BooleanQuery repoAndBranchQuery = new BooleanQuery();
+			repoAndBranchQuery.add(repoQuery, BooleanClause.Occur.MUST);
+			repoAndBranchQuery.add(branchMapQuery, BooleanClause.Occur.MUST);
+    		writer.deleteDocuments(repoAndBranchQuery);
+    		
+    		writer.addDocument(doc);
+    	} catch (final IOException ioe) {
+    		throw new IndexException("Unable to write to index", ioe);
+    	}
+    }
+    
+    /**
+     * Gets the document which stores branches currently indexed against the specified {@code repository}.
+     * 
+     * @param repository the repository to get indexed branches for. Must not be {@code null}
+     * @return the document found or {@code null} if no such document exists
+     * @throws IndexException
+     */
+    private Document getBranchesIndexedDocument(final GitRepository repository) throws IndexException {
+    	assert repository != null : "repository must not be null";
+    	
+    	final IndexReader reader;
+    	try {
+    		reader = IndexReader.open(FSDirectory.open(new File(getIndexPath().getPath()), new SimpleFSLockFactory()));
+    	} catch (final IOException e) {
+    		throw new IndexException("Problem with path " + getIndexPath().getPath() + ": " + e.getMessage(), e);
+    	}
+    	
+    	final IndexSearcher searcher = new IndexSearcher(reader);
+    	try {
+    		try {
+    			final TermQuery repoQuery = new TermQuery(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId())));
+    			final TermQuery branchMapQuery = new TermQuery(new Term(FIELD_BRANCHMAP, String.valueOf(Boolean.TRUE)));
+	         
+    			final BooleanQuery repoAndBranchQuery = new BooleanQuery();
+    			repoAndBranchQuery.add(repoQuery, BooleanClause.Occur.MUST);
+    			repoAndBranchQuery.add(branchMapQuery, BooleanClause.Occur.MUST);
+	         
+				final TopDocs topDocs = searcher.search(repoAndBranchQuery, 1);
+				if (topDocs.totalHits == 0) {
+					return null;
+				}
+				return searcher.doc(topDocs.scoreDocs[0].doc);
+    		} finally {
+	    		searcher.close();
+	    	}
+    	} catch (final IOException e) {
+    		throw new IndexException("Unable to search for branches", e);
+    	}
     }
     
     /**

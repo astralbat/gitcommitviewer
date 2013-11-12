@@ -1,5 +1,7 @@
 package jiracommitviewer.domain;
 
+import java.util.Date;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Validate;
 
@@ -21,6 +23,7 @@ public final class GitCommitKey extends AbstractCommitKey<GitCommitKey> {
 	 */
 	public GitCommitKey(final String commitHash, final int commitDate) {
 		Validate.notNull(commitHash, "commitHash must not be null");
+		Validate.isTrue(commitHash.length() == 40, "commitHash must be 40 characters in length");
 		
 		this.commitHash = commitHash;
 		this.commitTime = commitDate;
@@ -76,5 +79,12 @@ public final class GitCommitKey extends AbstractCommitKey<GitCommitKey> {
 	 */
 	public String getCommitHash() {
 		return commitHash;
+	}
+	
+	/**
+	 * {@inheritDoc}
+	 */
+	public String toString() {
+		return commitHash + " " + new Date(commitTime * 1000);
 	}
 }

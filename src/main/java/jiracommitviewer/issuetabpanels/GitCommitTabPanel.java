@@ -70,8 +70,6 @@ public class GitCommitTabPanel extends AbstractIssueTabPanel {
         webResourceManager.requireResource("jiracommitviewer.jiracommitviewer:git-resource-js");
 
         try {
-            // SVN-392 - Temporary setting to descending by default until JRA-30220 is fixed
-            final boolean sortAscending = false;
             final int pageSize = getPageSizeRequestParameter();
 
             final List<LogEntry<GitRepository, GitCommitKey>> logEntries = 
@@ -86,9 +84,8 @@ public class GitCommitTabPanel extends AbstractIssueTabPanel {
                 	actions.add(createGitRevisionAction(logEntry));
                 }
 
-                if (!sortAscending) {
-                    Collections.reverse(actions);
-                }
+                // Sort ascending
+                Collections.reverse(actions);
 
                 /*
                  * Hack! If we have more than a page of actions, that means we should show the 'More' button.
@@ -98,9 +95,9 @@ public class GitCommitTabPanel extends AbstractIssueTabPanel {
                      * ViewIssue will reverse the list of actions if the action sort order is descending, so we
                      * need to sublist based on the order.
                      */
-                    actions = sortAscending ? actions.subList(0, pageSize) : actions.subList(1, actions.size());
+                    actions = actions.subList(0, actions.size());
 
-                    final int lastActionIndex = sortAscending ? actions.size() - 1 : 0;
+                    final int lastActionIndex = actions.size() - 1;
                     GitCommitAction lastAction = actions.get(lastActionIndex);
 
                     /**
