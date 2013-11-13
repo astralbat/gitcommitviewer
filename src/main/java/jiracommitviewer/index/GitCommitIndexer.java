@@ -401,7 +401,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
      * @throws IndexException if there is some problem in the indexing subsystem meaning indexes cannot be updated
      * @throws RepositoryException 
      */
-    private void updateIndex(final GitRepository repository, final boolean fullIndex) throws IndexException, RepositoryException {
+	private void updateIndex(final GitRepository repository, final boolean fullIndex) throws IndexException, RepositoryException {
     	assert repository != null : "repository must not be null";
     	
         logger.debug("Updating commit index for repository: " + repository.getId() + ", full index = " + fullIndex);
@@ -434,9 +434,13 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	            		commitKeys.put(branchHead.getValue(), Arrays.asList(branchHead.getKey()));
 	            	}
 	            }
-	            // Detect branches removed
-	            for (final Map.Entry<String, GitCommitKey> branchHead : indexedBranches.entrySet()) {
-            		commitKeys.put(branchHead.getValue(), Arrays.asList(branchHead.getKey()));
+	            // Detect branches removed. We'll want to remove the branch from all documents where it is
+	            // kept and if those documents are empty of branches, the document should be removed entirely.
+	            // It is therefore easier to just reindex fully from here.
+	            if (indexedBranches.size() > 0) {
+	            	logger.debug("One or more branch deletions detected; performing full index");
+            		updateIndex(repository, true);
+            		return;
             	}
             }
             
@@ -564,7 +568,9 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	                for (int i = 0; i < fieldables.length; i++) {
 	                	documentBranches[i] = fieldables[i].stringValue();
 	                }
-	                return logEntry.getBranches().containsAll(Arrays.asList(documentBranches)) ? foundDocument : null;
+	                return new HashSet<String>(logEntry.getBranches()).equals(new HashSet<String>(Arrays.asList(documentBranches)))
+	                		? foundDocument
+	                		: null;
 	            } else if (hits.totalHits == 0) {
 	                return null;
 	            } else {
