@@ -149,7 +149,7 @@ public class GitCommitIndexerTest {
 		testIndex();
 		
 		// Look for a particular commit
-		final Iterator<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 5).iterator();
+		final Iterator<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 5, false).iterator();
 		Assert.assertTrue("Expected to find marker commit in history", hasCommit("095014f90aac621901d29e1e3986ad5f9e52361a", logEntries));
 	}
 	
@@ -176,7 +176,7 @@ public class GitCommitIndexerTest {
 		testIndex();
 		
 		// Look for a particular commit
-		final Iterator<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 5).iterator();
+		final Iterator<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 5, false).iterator();
 		Assert.assertFalse("Expected to not find marker commit in history", hasCommit("c1c33efe62aeeb02aa568e9075577f61c48a5568", logEntries));
 	}
 	
@@ -206,7 +206,7 @@ public class GitCommitIndexerTest {
 		
 		// Look for a particular commit
 		final Iterator<LogEntry<GitRepository, GitCommitKey>> logEntries = 
-				commitIndexer.getAllLogEntriesByProject("GCV", user, 0, 5).iterator();
+				commitIndexer.getAllLogEntriesByProject("GCV", user, 0, 5, false).iterator();
 		Assert.assertTrue("Expected to find marker commit in history", hasCommit("095014f90aac621901d29e1e3986ad5f9e52361a", logEntries));
 	}
 	
@@ -239,7 +239,7 @@ public class GitCommitIndexerTest {
 		
 		// Look for a particular commit
 		final Iterator<LogEntry<GitRepository, GitCommitKey>> logEntries = 
-				commitIndexer.getAllLogEntriesByVersion(version, user, 0, 5).iterator();
+				commitIndexer.getAllLogEntriesByVersion(version, user, 0, 5, false).iterator();
 		Assert.assertTrue("Expected to find marker commit in history", hasCommit("095014f90aac621901d29e1e3986ad5f9e52361a", logEntries));
 	}
 	
@@ -300,7 +300,7 @@ public class GitCommitIndexerTest {
 		commitIndexer.index(gitRepository);
 		
 		// Assert that the new file was indexed
-		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 1);
+		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 1, true);
 		Assert.assertEquals("Expected a log entry for the new issue", 1, logEntries.size());
 	}
 	
@@ -370,7 +370,7 @@ public class GitCommitIndexerTest {
 		commitIndexer.index(gitRepository);
 		
 		// Assert that the first commit no longer contains a reference to branch 'testbranch'
-		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 3);
+		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 3, true);
 		Assert.assertEquals(3, logEntries.size());
 		
 		boolean found = false;
@@ -452,7 +452,7 @@ public class GitCommitIndexerTest {
 		commitIndexer.index(gitRepository);
 		
 		// Assert that both branches are included
-		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 3);
+		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 3, true);
 		Assert.assertEquals(3, logEntries.size());
 		boolean found = false;
 		for (final LogEntry<GitRepository, GitCommitKey> entry : logEntries) {
@@ -528,7 +528,7 @@ public class GitCommitIndexerTest {
 		commitIndexer.index(gitRepository);
 		
 		// Assert that the first commit no longer contains a reference to branch 'testbranch'
-		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 2);
+		final List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 2, true);
 		Assert.assertEquals(2, logEntries.size());
 		boolean found = false;
 		for (final LogEntry<GitRepository, GitCommitKey> entry : logEntries) {
@@ -597,7 +597,7 @@ public class GitCommitIndexerTest {
 		// Index
 		commitIndexer.index(gitRepository);
 		
-		List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 3);
+		List<LogEntry<GitRepository, GitCommitKey>> logEntries = commitIndexer.getAllLogEntriesByIssue(issue, 0, 3, true);
 		Assert.assertEquals(3, logEntries.size());
 		Assert.assertEquals("GCV-1 C3", logEntries.get(0).getMessage());
 		Assert.assertEquals("GCV-1 C2", logEntries.get(1).getMessage());

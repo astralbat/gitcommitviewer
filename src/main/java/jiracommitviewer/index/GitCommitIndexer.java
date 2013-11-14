@@ -118,7 +118,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
      */
     @Override
     public List<LogEntry<GitRepository, GitCommitKey>> getAllLogEntriesByIssue(final Issue issue, final int pageNumber, 
-    		final int pageSize) throws IndexException {
+    		final int pageSize, final boolean ascending) throws IndexException {
     	Validate.notNull(issue, "issue must not be null");
     	Validate.isTrue(pageNumber >= 0, "pageNumber must be >= 0");
     	Validate.isTrue(pageSize >= 0, "pageSize must be >= 0");
@@ -136,7 +136,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	
 	        try {
 	            final TopDocs hits = searcher.search(createQueryByIssueKey(issue), MAX_COMMITS, 
-	            		new Sort(new SortField(FIELD_DATE, SortField.LONG, true)));
+	            		new Sort(new SortField(FIELD_DATE, SortField.LONG, !ascending)));
 	            final List<LogEntry<GitRepository, GitCommitKey>> logEntries = 
 	            		new ArrayList<LogEntry<GitRepository, GitCommitKey>>(hits.totalHits);
 	
@@ -188,7 +188,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
      */
     @Override
     public List<LogEntry<GitRepository, GitCommitKey>> getAllLogEntriesByProject(final String projectKey, final User user, 
-    		final int pageNumber, final int pageSize) throws IndexException {
+    		final int pageNumber, final int pageSize, final boolean ascending) throws IndexException {
     	Validate.notNull(projectKey, "projectKey must not be null");
     	Validate.notNull(user, "user must not be null");
     	Validate.isTrue(pageNumber >= 0, "pageNumber must be >= 0");
@@ -207,7 +207,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	
 	        try {
 	            final TopDocs hits = searcher.search(query, new ProjectRevisionFilter(issueManager, permissionManager, user, projectKey), 
-	            		MAX_COMMITS, new Sort(new SortField(FIELD_DATE, SortField.LONG, true)));
+	            		MAX_COMMITS, new Sort(new SortField(FIELD_DATE, SortField.LONG, !ascending)));
 	            final List<LogEntry<GitRepository, GitCommitKey>> logEntries = new ArrayList<LogEntry<GitRepository, GitCommitKey>>();
 	            
 	            for (int i = 0, j = Math.min(hits.totalHits, MAX_COMMITS); i < j; ++i) {
@@ -260,7 +260,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     @SuppressWarnings("deprecation")
 	@Override
     public List<LogEntry<GitRepository, GitCommitKey>> getAllLogEntriesByVersion(final Version version, final User user, 
-    		final int pageNumber, final int pageSize) throws IndexException {
+    		final int pageNumber, final int pageSize, final boolean ascending) throws IndexException {
     	Validate.notNull(version, "version must not be null");
     	Validate.notNull(user, "user must not be null");
     	Validate.isTrue(pageNumber >= 0, "pageNumber must be >= 0");
@@ -301,7 +301,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 	        try {
 	            // Run the query and sort by date in descending order
 	            final TopDocs hits = searcher.search(query, new PermittedIssuesRevisionFilter(issueManager, permissionManager, user, 
-	            		permittedIssueKeys), MAX_COMMITS, new Sort(new SortField(FIELD_DATE, SortField.LONG, true)));
+	            		permittedIssueKeys), MAX_COMMITS, new Sort(new SortField(FIELD_DATE, SortField.LONG, !ascending)));
 	            final List<LogEntry<GitRepository, GitCommitKey>> logEntries = new ArrayList<LogEntry<GitRepository, GitCommitKey>>();
 	
 	            for (int i = 0, j = Math.min(hits.totalHits, MAX_COMMITS); i < j; ++i) {

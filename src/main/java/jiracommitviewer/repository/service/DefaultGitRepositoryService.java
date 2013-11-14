@@ -736,32 +736,30 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 			return commitFiles;
 		}
 		
-		// Create a diff between this commit and the parent's and examine all the diff entries.
-		for (final RevCommit parent : commit.getParents()) {
-			walk.parseCommit(parent.getId());
-			final DiffFormatter df = new DiffFormatter(DisabledOutputStream.INSTANCE);
-			df.setRepository(fileRepository);
-			df.setDiffComparator(RawTextComparator.DEFAULT);
-			df.setDetectRenames(true);
-			final List<DiffEntry> diffs = df.scan(parent.getTree(), commit.getTree());
-			for (final DiffEntry diff : diffs) {
-				switch (diff.getChangeType()) {
-				case ADD:
-					commitFiles.add(new AddedCommitFile(diff.getNewPath()));
-					break;
-				case MODIFY:
-					commitFiles.add(new ModifiedCommitFile(diff.getOldPath()));
-					break;
-				case RENAME:
-					commitFiles.add(new RenamedCommitFile(diff.getOldPath(), diff.getNewPath()));
-					break;
-				case DELETE:
-					commitFiles.add(new DeletedCommitFile(diff.getOldPath()));
-					break;
-				case COPY:
-					commitFiles.add(new CopiedCommitFile(diff.getOldPath(), diff.getNewPath()));
-					break;
-				}
+		// Create a diff between this commit and the first parent and examine all the diff entries.
+		walk.parseCommit(commit.getParent(0).getId());
+		final DiffFormatter df = new DiffFormatter(DisabledOutputStream.INSTANCE);
+		df.setRepository(fileRepository);
+		df.setDiffComparator(RawTextComparator.DEFAULT);
+		df.setDetectRenames(true);
+		final List<DiffEntry> diffs = df.scan(commit.getParent(0).getTree(), commit.getTree());
+		for (final DiffEntry diff : diffs) {
+			switch (diff.getChangeType()) {
+			case ADD:
+				commitFiles.add(new AddedCommitFile(diff.getNewPath()));
+				break;
+			case MODIFY:
+				commitFiles.add(new ModifiedCommitFile(diff.getOldPath()));
+				break;
+			case RENAME:
+				commitFiles.add(new RenamedCommitFile(diff.getOldPath(), diff.getNewPath()));
+				break;
+			case DELETE:
+				commitFiles.add(new DeletedCommitFile(diff.getOldPath()));
+				break;
+			case COPY:
+				commitFiles.add(new CopiedCommitFile(diff.getOldPath(), diff.getNewPath()));
+				break;
 			}
 		}
 		return commitFiles;

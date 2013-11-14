@@ -57,10 +57,7 @@
 	</tr>
 </table>
 
-#set ($innerClassSeparator = "$")
-#set ($lastGitCommitActionName = "LastGitCommitActionInPage")
-
-#if ($git.class.name == "jiracommitviewer.issuetabpanels.gitRevisionsTabPanel${innerClassSeparator}${lastGitCommitActionName}")
+#if ("$git.class.name" == "jiracommitviewer.issuetabpanels.GitCommitTabPanel$LastGitCommitActionInPage")
     <div class="plugin_git_showmore_issuetab">
         <fieldset style="display: none">
             <input type="hidden" name="issueKey" value="">

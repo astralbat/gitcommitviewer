@@ -97,9 +97,9 @@ public class GitProjectTabPanel extends AbstractProjectTabPanel implements Proje
         // Get the list of recently updated issues and add it to the velocity context
         final int pageSize = getPageSizeRequestParameter();
         List<GitProjectCommitAction> recentCommits = getRecentCommits(key, version, user, 
-        		getPageRequestParameter() * pageSize, pageSize + 1);
+        		getPageRequestParameter() * pageSize, pageSize);
 
-        if (recentCommits.size() > pageSize) {
+        if (recentCommits.size() > 0 && recentCommits.size() == pageSize) {
             startingParams.put("moreAvailable", true);
             recentCommits = recentCommits.subList(0, pageSize);
         }
@@ -145,9 +145,9 @@ public class GitProjectTabPanel extends AbstractProjectTabPanel implements Proje
             List<LogEntry<GitRepository, GitCommitKey>> logEntries;
 
             if (version == null) {
-                logEntries = gitCommitIndexer.getAllLogEntriesByProject(key, user, startIndex, pageSize);
+                logEntries = gitCommitIndexer.getAllLogEntriesByProject(key, user, startIndex, pageSize, false);
             } else {
-                logEntries = gitCommitIndexer.getAllLogEntriesByVersion(version, user, startIndex, pageSize);
+                logEntries = gitCommitIndexer.getAllLogEntriesByVersion(version, user, startIndex, pageSize, false);
             }
 
             if (logEntries.size() > 0) {

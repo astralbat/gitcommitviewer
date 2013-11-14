@@ -44,7 +44,7 @@
 
             <!-- Version drop-down list -->
             <td align="right" valign="center">
-				<form name="versionSelectForm" class="plugin_git_versionselect_form" action="$req.contextPath/browse/$projectKey?report=jiracommitviewer.jiracommitviewer:git-project-tab" method="POST">
+				<form name="versionSelectForm" class="plugin_git_versionselect_form" action="$req.contextPath/browse/$projectKey?report=jiracommitviewer.jiracommitviewer:git-project-tab" method="get">
 					$i18n.getText("git.project-tab.select-version")
 					<select name="selectedVersion">
 						<option value="-1" #if (!$selectedVersion) selected="selected" #end>$i18n.getText("git.project-tab.all-versions")</option>

@@ -73,10 +73,11 @@ public interface CommitIndexer<R extends AbstractRepository, K extends AbstractC
 	 * @param issue the issue to get log entries for. Must not be {@code null}
 	 * @param pageNumber the page of results to get. The first page is 0
 	 * @param pageSize the number of results that are in a page
+	 * @param ascending true to return entries in ascending order, false for descending
 	 * @return the log entries sorted by date in reverse order. Never {@code null}
 	 * @throws IndexException if there is a problem reading the index
 	 */
-	List<LogEntry<R, K>> getAllLogEntriesByIssue(Issue issue, int pageNumber, int pageSize) throws IndexException;
+	List<LogEntry<R, K>> getAllLogEntriesByIssue(Issue issue, int pageNumber, int pageSize, boolean ascending) throws IndexException;
 	
 	/**
 	 * Gets all log entries for the specified {@code project}.
@@ -90,10 +91,12 @@ public interface CommitIndexer<R extends AbstractRepository, K extends AbstractC
 	 * @param user the requesting user. Must not be {@code null}
 	 * @param pageNumber the page of results to get. The first page is 0
 	 * @param pageSize the number of results that are in a page
+	 * @param ascending true to return entries in ascending order, false for descending
 	 * @return the log entries sorted by date in reverse order. Never {@code null}
 	 * @throws IndexException if there is a problem reading the index
 	 */
-	List<LogEntry<R, K>> getAllLogEntriesByProject(String projectKey, User user, int pageNumber, int pageSize) throws IndexException;
+	List<LogEntry<R, K>> getAllLogEntriesByProject(String projectKey, User user, int pageNumber, int pageSize, boolean ascending) 
+			throws IndexException;
 	
 	/**
 	 * Gets all the log entries for the specified {@code version}.
@@ -107,8 +110,10 @@ public interface CommitIndexer<R extends AbstractRepository, K extends AbstractC
 	 * @param user the requesting user. Must not be {@code null}
 	 * @param pageNumber the page of results to get. The first page is 0
 	 * @param pageSize hte number of results that are in a page
+	 * @param ascending true to return entries in ascending order, false for descending
 	 * @return the requested page. Never {@code null}
 	 * @throws IndexException if there is a problem reading the index
 	 */
-	List<LogEntry<R, K>> getAllLogEntriesByVersion(Version version, User user, int pageNumber, int pageSize) throws IndexException;
+	List<LogEntry<R, K>> getAllLogEntriesByVersion(Version version, User user, int pageNumber, int pageSize, boolean ascending) 
+			throws IndexException;
 }

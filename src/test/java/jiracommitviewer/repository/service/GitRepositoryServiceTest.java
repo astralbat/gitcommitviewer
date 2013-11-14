@@ -341,11 +341,10 @@ public class GitRepositoryServiceTest {
 		
 		Assert.assertNotNull("No log entries", logEntry);
 		List<CommitFile> committedFiles = logEntry.getCommitFiles();
-		Assert.assertEquals(2, committedFiles.size());
+		Assert.assertEquals(1, committedFiles.size());
+		Assert.assertEquals("GCV-1 Merge 'firstbranch' into 'secondbranch'", logEntry.getMessage().trim());
 		Assert.assertTrue(committedFiles.get(0) instanceof AddedCommitFile);
-		Assert.assertTrue(committedFiles.get(1) instanceof AddedCommitFile);
 		Assert.assertEquals("firstbranchfile.txt", ((AddedCommitFile)committedFiles.get(0)).getPath());
-		Assert.assertEquals("secondbranchfile.txt", ((AddedCommitFile)committedFiles.get(1)).getPath());
 	}
 	
 	/**

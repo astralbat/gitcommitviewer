@@ -73,7 +73,7 @@ public class GitCommitTabPanel extends AbstractIssueTabPanel {
             final int pageSize = getPageSizeRequestParameter();
 
             final List<LogEntry<GitRepository, GitCommitKey>> logEntries = 
-            		gitCommitIndexer.getAllLogEntriesByIssue(issue, getPageRequestParameter(), pageSize);
+            		gitCommitIndexer.getAllLogEntriesByIssue(issue, getPageRequestParameter(), pageSize, true);
 
             if (logEntries.isEmpty()) {
                 final GenericMessageAction action = new GenericMessageAction(getText("git.no.log.entries.message"));
@@ -84,13 +84,10 @@ public class GitCommitTabPanel extends AbstractIssueTabPanel {
                 	actions.add(createGitRevisionAction(logEntry));
                 }
 
-                // Sort ascending
-                Collections.reverse(actions);
-
                 /*
                  * Hack! If we have more than a page of actions, that means we should show the 'More' button.
                  */
-                if (!actions.isEmpty() && actions.size() > pageSize) {
+                if (!actions.isEmpty() && actions.size() == pageSize) {
                     /**
                      * ViewIssue will reverse the list of actions if the action sort order is descending, so we
                      * need to sublist based on the order.
