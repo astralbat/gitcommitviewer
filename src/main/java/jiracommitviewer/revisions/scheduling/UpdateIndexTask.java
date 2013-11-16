@@ -1,6 +1,7 @@
 package jiracommitviewer.revisions.scheduling;
 
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 
 import jiracommitviewer.RepositoryManager;
 import jiracommitviewer.domain.GitRepository;
@@ -18,7 +19,8 @@ import com.atlassian.sal.api.scheduling.PluginJob;
  */
 public class UpdateIndexTask implements PluginJob {
 
-    private final static Logger logger = LoggerFactory.getLogger(UpdateIndexTask.class);
+    private static final Logger logger = LoggerFactory.getLogger(UpdateIndexTask.class);
+    private static final ReentrantLock lock = new ReentrantLock();
 
     @Override
     public void execute(Map<String, Object> jobDataMap) {
@@ -31,9 +33,17 @@ public class UpdateIndexTask implements PluginJob {
             if (gitCommitIndexer == null) {
                 return; // Just return --- the plugin is disabled. Don't log anything.
             }
-
-            for (final GitRepository repository : repositoryManager.getRepositoryList(GitRepository.class)) {
-            	gitCommitIndexer.index(repository);
+            
+            // The JIRA scheduler allows multiple jobs of the same type to run concurrently. We want to prevent this
+            // as the indexer is not thread-safe.
+            if (lock.tryLock()) {
+            	try {
+            		for (final GitRepository repository : repositoryManager.getRepositoryList(GitRepository.class)) {
+            			gitCommitIndexer.index(repository);
+            		}
+            	} finally {
+            		lock.unlock();
+            	}
             }
         } catch (final Exception e) {
             logger.error("Error indexing changes", e);

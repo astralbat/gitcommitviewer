@@ -97,7 +97,7 @@ public class GitProjectTabPanel extends AbstractProjectTabPanel implements Proje
         // Get the list of recently updated issues and add it to the velocity context
         final int pageSize = getPageSizeRequestParameter();
         List<GitProjectCommitAction> recentCommits = getRecentCommits(key, version, user, 
-        		getPageRequestParameter() * pageSize, pageSize);
+        		getPageRequestParameter(), pageSize);
 
         if (recentCommits.size() > 0 && recentCommits.size() == pageSize) {
             startingParams.put("moreAvailable", true);
@@ -123,16 +123,16 @@ public class GitProjectTabPanel extends AbstractProjectTabPanel implements Proje
      * whole are returned instead.
      * @param user the remote user &mdash; we need to check that the user has "View Version Control" permission for an issue
      * before we show a commit for it. Must not be {@code null}
-     * @param startIndex for paging &mdash; the index of the entry that is the first result in the page desired. The first page is at 0
+     * @param pageNumber for paging &mdash; the desired page of commits. The first page is at 0
      * @param pageSize for paging &mdash; the size of the page. Must be > 0
      * @return a {@link java.util.List} of {@link GitProjectCommitAction} objects, each of which holds a valid {@link LogEntry}. Never
      * {@code null}
      */
-    private List<GitProjectCommitAction> getRecentCommits(final String key, final Version version, final User user, final int startIndex, 
+    private List<GitProjectCommitAction> getRecentCommits(final String key, final Version version, final User user, final int pageNumber, 
     		final int pageSize) {
     	assert key != null : "key must not be null";
     	assert user != null : "user must not be null";
-    	assert startIndex >= 0 : "startIndex must be >= 0";
+    	assert pageNumber >= 0 : "pageNumber must be >= 0";
     	assert pageSize > 0 : "pageSize must be > 0";
     	
         if (logger.isDebugEnabled()) {
@@ -145,9 +145,9 @@ public class GitProjectTabPanel extends AbstractProjectTabPanel implements Proje
             List<LogEntry<GitRepository, GitCommitKey>> logEntries;
 
             if (version == null) {
-                logEntries = gitCommitIndexer.getAllLogEntriesByProject(key, user, startIndex, pageSize, false);
+                logEntries = gitCommitIndexer.getAllLogEntriesByProject(key, user, pageNumber, pageSize, false);
             } else {
-                logEntries = gitCommitIndexer.getAllLogEntriesByVersion(version, user, startIndex, pageSize, false);
+                logEntries = gitCommitIndexer.getAllLogEntriesByVersion(version, user, pageNumber, pageSize, false);
             }
 
             if (logEntries.size() > 0) {
