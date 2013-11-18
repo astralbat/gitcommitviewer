@@ -40,8 +40,6 @@ import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.SimpleFSLockFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -359,15 +357,12 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
         // Create indexes if necessary to prevent getting an error
         createIndexIfNeeded();
 
-        IndexWriter writer = null;
         try {
-	        try {
-	            writer = indexAccessor.getIndexWriter(getIndexPath().getPath(), false, ANALYZER);
+        	final IndexWriter writer = indexAccessor.getIndexWriter(getIndexPath().getPath(), false, ANALYZER);
+        	try {
 	            writer.deleteDocuments(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId())));
 	        } finally {
-	            if (writer != null) {
-	            	writer.close();
-	            }
+	        	writer.close();
 	        }
         } catch (final IOException ioe) {
             throw new IndexException("Index IO access error", ioe);
@@ -448,19 +443,19 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
             final LogEntryEnumerator<GitRepository, GitCommitKey> logEntryEnumerator = 
             		gitRepositoryService.getLogEntries(repository, commitKeys.size() == 0 ? null : commitKeys);
 
-            final IndexWriter writer = indexAccessor.getIndexWriter(getIndexPath().getPath(), false, ANALYZER);
             // 0 - Success
             // 1 - Failure
             int status = 1;
+            final IndexWriter writer = indexAccessor.getIndexWriter(getIndexPath().getPath(), false, ANALYZER);
             try {
             	writer.prepareCommit();
-                final IndexReader reader = indexAccessor.getIndexReader(getIndexPath().getPath());
                 
                 // Delete all documents to start with when full indexing
                 if (fullIndex) {
                 	writer.deleteDocuments(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId())));
                 }
                 
+                final IndexReader reader = indexAccessor.getIndexReader(getIndexPath().getPath());
                 try {
                 	while (logEntryEnumerator.hasNext()) {
                 		final LogEntry<GitRepository, GitCommitKey> logEntry = logEntryEnumerator.next();
@@ -510,18 +505,19 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
                 }
                 status = 0;
             } finally {
-            	if (status == 0) {
-            		writer.commit();
-                    updateBranchesIndexed(repository, repositoryBranches, writer);
-            	} else if (status == 1) {
-            		logger.debug("Error, rolling back indexing just performed");
-            		writer.rollback();
-            	}
-            	if (status == 0 || status == 1) {
+            	try {
+            		if (status == 0) {
+            			writer.commit();
+            			updateBranchesIndexed(repository, repositoryBranches, writer);
+            		} else if (status == 1) {
+            			logger.debug("Error, rolling back indexing just performed");
+            			writer.rollback();
+            		}
+            	} finally {
             		writer.close();
             	}
             }
-        } catch (IOException e) {
+        } catch (final IOException e) {
             logger.warn("Unable to index repository '" + repository.getDisplayName() + "'", e);
         }
         logger.debug("Indexing for repository complete: " + repository.getId());
@@ -733,15 +729,9 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
     private Document getBranchesIndexedDocument(final GitRepository repository) throws IndexException {
     	assert repository != null : "repository must not be null";
     	
-    	final IndexReader reader;
     	try {
-    		reader = IndexReader.open(FSDirectory.open(new File(getIndexPath().getPath()), new SimpleFSLockFactory()));
-    	} catch (final IOException e) {
-    		throw new IndexException("Problem with path " + getIndexPath().getPath() + ": " + e.getMessage(), e);
-    	}
-    	
-    	final IndexSearcher searcher = new IndexSearcher(reader);
-    	try {
+    		final IndexReader reader = indexAccessor.getIndexReader(getIndexPath().getPath());
+    		final IndexSearcher searcher = new IndexSearcher(reader);
     		try {
     			final TermQuery repoQuery = new TermQuery(new Term(FIELD_REPOSITORY, String.valueOf(repository.getId())));
     			final TermQuery branchMapQuery = new TermQuery(new Term(FIELD_BRANCHMAP, String.valueOf(Boolean.TRUE)));
@@ -757,6 +747,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
 				return searcher.doc(topDocs.scoreDocs[0].doc);
     		} finally {
 	    		searcher.close();
+	    		reader.close();
 	    	}
     	} catch (final IOException e) {
     		throw new IndexException("Unable to search for branches", e);
