@@ -15,17 +15,17 @@ import com.atlassian.core.exception.InfrastructureException;
 import com.atlassian.sal.api.lifecycle.LifecycleAware;
 import com.atlassian.sal.api.scheduling.PluginScheduler;
 
-public class UpdateIndexMonitorImpl implements UpdateIndexMonitor, LifecycleAware, DisposableBean {
+public class GitUpdateIndexMonitorImpl implements UpdateIndexMonitor, LifecycleAware, DisposableBean {
 	
-	private static final String JOB_NAME = UpdateIndexMonitorImpl.class.getName() + ":job";
-    private final static Logger logger = LoggerFactory.getLogger(UpdateIndexMonitorImpl.class);
+	private static final String JOB_NAME = GitUpdateIndexMonitorImpl.class.getName() + ":job";
+    private final static Logger logger = LoggerFactory.getLogger(GitUpdateIndexMonitorImpl.class);
     private final RepositoryManager repositoryManager;
 	private final PluginScheduler pluginScheduler;
     private final GitCommitIndexer gitCommitIndexer;
 
     private static final long DEFAULT_INDEX_INTERVAL = DateTimeConstants.MILLIS_PER_MINUTE;
 
-	public UpdateIndexMonitorImpl(final RepositoryManager repositoryManager, 
+	public GitUpdateIndexMonitorImpl(final RepositoryManager repositoryManager, 
 			final PluginScheduler pluginScheduler, final GitCommitIndexer gitCommitIndexer) {
 		this.repositoryManager = repositoryManager;
 		this.pluginScheduler = pluginScheduler;
@@ -42,7 +42,7 @@ public class UpdateIndexMonitorImpl implements UpdateIndexMonitor, LifecycleAwar
                 JOB_NAME,
                 UpdateIndexTask.class,
                 new HashMap<String, Object>() {{
-                    put("UpdateIndexMonitorImpl:instance", UpdateIndexMonitorImpl.this);
+                    put("UpdateIndexMonitorImpl:instance", GitUpdateIndexMonitorImpl.this);
                     put("GitCommitIndexer", gitCommitIndexer);
                     put("RepositoryManager", repositoryManager);
                 }},

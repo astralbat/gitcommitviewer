@@ -24,7 +24,7 @@ public class UpdateIndexTask implements PluginJob {
 
     @Override
     public void execute(Map<String, Object> jobDataMap) {
-        final UpdateIndexMonitorImpl monitor = (UpdateIndexMonitorImpl)jobDataMap.get("UpdateIndexMonitorImpl:instance");
+        final GitUpdateIndexMonitorImpl monitor = (GitUpdateIndexMonitorImpl)jobDataMap.get("UpdateIndexMonitorImpl:instance");
         final GitCommitIndexer gitCommitIndexer = (GitCommitIndexer)jobDataMap.get("GitCommitIndexer");
         final RepositoryManager repositoryManager = (RepositoryManager)jobDataMap.get("RepositoryManager");
         assert monitor != null;

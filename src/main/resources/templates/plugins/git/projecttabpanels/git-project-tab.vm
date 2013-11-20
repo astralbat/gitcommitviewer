@@ -106,7 +106,7 @@
                     <td bgcolor="#ffffff" width="8%" valign="top">$commit.linkRenderer.getChangesetLink($commit.logEntry)</td>
                     <td bgcolor="#ffffff" width="14%" valign="top">$!commit.logEntry.date</td>
                     <td bgcolor="#ffffff" width="11%" valign="top">$textutils.htmlEncode($stringUtils.defaultString($commit.logEntry.authorName))</td>
-                    <td bgcolor="#ffffff" valign="top">#makelinkedhtml($commit.logEntry.getMessage().trim())
+                    <td bgcolor="#ffffff" valign="top" style="word-wrap: break-word">#makelinkedhtml($commit.logEntry.getMessage().trim())
                     
                     	<div style="background-color: #f0f0f0">
                     		<b>$i18n.getText("git.project-tab.files-changed")</b>

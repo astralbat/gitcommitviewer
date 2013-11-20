@@ -24,7 +24,7 @@
     	<td bgcolor="#ffffff" width="8%" valign="top" rowspan="3">$git.linkRenderer.getChangesetLink($git.logEntry)</td>
     	<td bgcolor="#ffffff" width="14%" valign="top" rowspan="3">$!git.logEntry.date</td>
     	<td bgcolor="#ffffff" width="11%" valign="top" rowspan="3">$textutils.htmlEncode($stringUtils.defaultString($git.logEntry.authorName))</td>
-    	<td bgcolor="#ffffff" valign="top">#makelinkedhtml($git.logEntry.getMessage().trim())
+    	<td bgcolor="#ffffff" valign="top" style="word-wrap: break-word">#makelinkedhtml($git.logEntry.getMessage().trim())
 
 			<div style="background-color: #f0f0f0">
 				<strong>$i18n.getText("git.issue-tab.files-changed")</strong>
