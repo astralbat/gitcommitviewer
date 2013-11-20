@@ -27,7 +27,7 @@
     <beans:bean id="revisionIndexer" class="jiracommitviewer.index.GitCommitIndexer">
     </beans:bean>
 
-    <beans:bean id="schedulerComponent" class="jiracommitviewer.revisions.scheduling.UpdateIndexMonitorImpl">
+    <beans:bean id="schedulerComponent" class="jiracommitviewer.revisions.scheduling.GitUpdateIndexMonitorImpl">
     	<beans:constructor-arg index="0" ref="gitManager" />
         <beans:constructor-arg index="1" ref="pluginScheduler" />
         <beans:constructor-arg index="2" ref="revisionIndexer" />
