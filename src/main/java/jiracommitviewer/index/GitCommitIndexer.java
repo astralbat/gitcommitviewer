@@ -441,7 +441,7 @@ public class GitCommitIndexer implements CommitIndexer<GitRepository, GitCommitK
             
             // Get the filtered entries
             final LogEntryEnumerator<GitRepository, GitCommitKey> logEntryEnumerator = 
-            		gitRepositoryService.getLogEntries(repository, commitKeys.size() == 0 ? null : commitKeys);
+            		gitRepositoryService.getLogEntries(repository, commitKeys);
 
             // 0 - Success
             // 1 - Failure

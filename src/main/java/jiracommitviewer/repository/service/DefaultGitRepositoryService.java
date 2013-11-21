@@ -793,8 +793,13 @@ public class DefaultGitRepositoryService extends AbstractRepositoryService<GitRe
 			
 			if (commitKeys == null) {
 				for (final Ref branch : Git.wrap(fileRepository).branchList().call()) {
-					branchTracker.put(branch.getObjectId(), 
-							new ArrayList<String>(Arrays.asList(branch.getName().substring("refs/heads/".length()))));
+					List<String> branches = branchTracker.get(branch.getObjectId());
+					if (branches != null) {
+						branches.add(branch.getName().substring("refs/heads/".length()));
+					} else {
+						branches = new ArrayList<String>(Arrays.asList(branch.getName().substring("refs/heads/".length())));
+					}
+					branchTracker.put(branch.getObjectId(), branches);
 					walk.markStart(walk.parseCommit(branch.getObjectId()));
 				}
 			} else {
